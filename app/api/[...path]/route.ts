@@ -1,0 +1,697 @@
+import { NextRequest, NextResponse } from "next/server";
+import { isValidObjectId } from "mongoose";
+import { connectDatabase } from "@/lib/db";
+import { Lead, User } from "@/models";
+import { authCookieOptions, cookieName, signAuthToken, verifyAuthToken } from "@/lib/auth";
+import { getIstDayRange } from "@/lib/time";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type AuthPayload = {
+  id: string;
+  role: "admin" | "employee";
+  name: string;
+  email: string;
+};
+
+type LoginBody = {
+  email?: string;
+  password?: string;
+};
+
+type LeadBody = Record<string, unknown> & {
+  leads?: unknown;
+  assignedTo?: string | null;
+  status?: string;
+  followUpDate?: string;
+  followUpNote?: string;
+  notes?: string;
+  outcome?: string;
+  duration?: string;
+};
+
+function json(
+  payload: {
+    success: boolean;
+    message?: string;
+    data?: unknown;
+  },
+  status = 200
+) {
+  return NextResponse.json(payload, { status });
+}
+
+function ok(data?: unknown, message?: string, status = 200) {
+  return json({ success: true, message, data }, status);
+}
+
+function fail(message: string, status = 400) {
+  return json({ success: false, message }, status);
+}
+
+function getSegments(request: NextRequest) {
+  return request.nextUrl.pathname.split("/").filter(Boolean).slice(1);
+}
+
+async function parseJson<T>(request: NextRequest): Promise<T | null> {
+  const text = await request.text();
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+function getAuthPayload(request: NextRequest): AuthPayload | null {
+  const token = request.cookies.get(cookieName)?.value;
+  if (!token) {
+    return null;
+  }
+
+  try {
+    return verifyAuthToken(token);
+  } catch {
+    return null;
+  }
+}
+
+function unauthorized() {
+  return fail("Authentication required", 401);
+}
+
+function forbidden(message = "Admin access required") {
+  return fail(message, 403);
+}
+
+function notFound(message = "Not found") {
+  return fail(message, 404);
+}
+
+function methodNotAllowed(_allow: string[] | string) {
+  void _allow;
+  return json({ success: false, message: "Method not allowed" }, 405);
+}
+
+function buildLeadFilter(searchParams: URLSearchParams) {
+  const filter: Record<string, unknown> = {};
+
+  const status = searchParams.get("status");
+  const niche = searchParams.get("niche");
+  const assignedTo = searchParams.get("assignedTo");
+  const websiteStatus = searchParams.get("websiteStatus");
+  const leadQuality = searchParams.get("leadQuality");
+  const city = searchParams.get("city");
+  const search = searchParams.get("search");
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+
+  if (status) filter.status = status;
+  if (niche) filter.niche = niche;
+  if (assignedTo) filter.assignedTo = assignedTo;
+  if (websiteStatus) filter.websiteStatus = websiteStatus;
+  if (leadQuality) filter.leadQuality = leadQuality;
+  if (city) filter.city = new RegExp(city, "i");
+  if (search) {
+    filter.$or = [{ name: new RegExp(search, "i") }, { phone: new RegExp(search, "i") }];
+  }
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) (filter.createdAt as Record<string, Date>).$gte = new Date(from);
+    if (to) (filter.createdAt as Record<string, Date>).$lte = new Date(to);
+  }
+
+  return filter;
+}
+
+async function requireAuth(request: NextRequest) {
+  const payload = getAuthPayload(request);
+  if (!payload) {
+    return null;
+  }
+
+  return payload;
+}
+
+async function requireAdmin(request: NextRequest) {
+  const payload = await requireAuth(request);
+  if (!payload) {
+    return null;
+  }
+
+  if (payload.role !== "admin") {
+    return null;
+  }
+
+  return payload;
+}
+
+async function handleAuth(request: NextRequest, segments: string[]) {
+  const [action] = segments;
+
+  if (action === "login") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+
+    const body = (await parseJson<LoginBody>(request)) ?? {};
+    const email = body.email?.toLowerCase().trim();
+    const password = body.password;
+
+    if (!email || !password) {
+      return fail("Email and password are required", 400);
+    }
+
+    const user = await User.findOne({ email, isActive: true }).select("+password");
+    if (!user) {
+      return fail("Invalid credentials", 401);
+    }
+
+    const passwordMatches = await user.comparePassword(password);
+    if (!passwordMatches) {
+      return fail("Invalid credentials", 401);
+    }
+
+    const token = signAuthToken({
+      id: user._id.toString(),
+      role: user.role,
+      name: user.name,
+      email: user.email,
+    });
+
+    const response = ok(
+      {
+        user: {
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          phone: user.phone,
+        },
+      },
+      undefined,
+      200
+    );
+
+    response.cookies.set(cookieName, token, authCookieOptions());
+    return response;
+  }
+
+  if (action === "logout") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+
+    const response = ok(undefined, "Logged out successfully");
+    response.cookies.set(cookieName, "", { ...authCookieOptions(), maxAge: 0 });
+    return response;
+  }
+
+  if (action === "me") {
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+
+    const payload = await requireAuth(request);
+    if (!payload) {
+      return unauthorized();
+    }
+
+    const user = await User.findById(payload.id).lean();
+    if (!user) {
+      return notFound("User not found");
+    }
+
+    return ok({
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+      },
+    });
+  }
+
+  return notFound("Auth route not found");
+}
+
+async function handleLeadDetailAction(
+  request: NextRequest,
+  leadId: string,
+  action: string,
+  payload: AuthPayload
+) {
+  if (!isValidObjectId(leadId)) {
+    return fail("Invalid lead id", 400);
+  }
+
+  const lead = await Lead.findById(leadId);
+  if (!lead) {
+    return notFound("Lead not found");
+  }
+
+  if (payload.role !== "admin") {
+    const assignedTo = lead.assignedTo?.toString?.();
+    if (!assignedTo || assignedTo !== payload.id) {
+      return forbidden("You do not have access to this lead");
+    }
+  }
+
+  if (action === "status") {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    const body = (await parseJson<LeadBody>(request)) ?? {};
+    if (!body.status) return fail("Status is required", 400);
+
+    const updatedLead = await Lead.findByIdAndUpdate(leadId, { status: body.status }, { new: true });
+    return ok({ lead: updatedLead });
+  }
+
+  if (action === "calllog") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const body = (await parseJson<LeadBody>(request)) ?? {};
+
+    const updatedLead = await Lead.findByIdAndUpdate(
+      leadId,
+      {
+        $push: {
+          callLogs: {
+            calledBy: payload.id,
+            calledAt: new Date(),
+            notes: body.notes ?? "",
+            outcome: body.outcome ?? "",
+            duration: body.duration ?? "",
+          },
+        },
+        status: "called",
+      },
+      { new: true }
+    );
+
+    return json({ success: true, data: { lead: updatedLead } }, 201);
+  }
+
+  if (action === "followup") {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    const body = (await parseJson<LeadBody>(request)) ?? {};
+
+    const updatedLead = await Lead.findByIdAndUpdate(
+      leadId,
+      {
+        followUpDate: body.followUpDate ? new Date(body.followUpDate) : null,
+        followUpNote: body.followUpNote ?? "",
+      },
+      { new: true }
+    );
+
+    return ok({ lead: updatedLead });
+  }
+
+  if (action === "assign") {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    if (payload.role !== "admin") return forbidden();
+
+    const body = (await parseJson<LeadBody>(request)) ?? {};
+    const updatedLead = await Lead.findByIdAndUpdate(
+      leadId,
+      { assignedTo: body.assignedTo || null },
+      { new: true }
+    ).populate("assignedTo");
+
+    return ok({ lead: updatedLead });
+  }
+
+  return notFound("Lead route not found");
+}
+
+async function handleLeads(request: NextRequest, segments: string[]) {
+  const [first, second] = segments;
+
+  if (!first) {
+    if (request.method === "POST") {
+      const payload = await requireAdmin(request);
+      if (!payload) {
+        return unauthorized();
+      }
+
+      const body = (await parseJson<Record<string, unknown>>(request)) ?? {};
+
+      try {
+        const lead = await Lead.create(body);
+        return json({ success: true, data: { lead } }, 201);
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : "Unable to create lead", 400);
+      }
+    }
+
+    if (request.method === "GET") {
+      const payload = await requireAdmin(request);
+      if (!payload) {
+        return unauthorized();
+      }
+
+      const page = Math.max(Number(request.nextUrl.searchParams.get("page") ?? 1), 1);
+      const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") ?? 20), 1), 100);
+      const filter = buildLeadFilter(request.nextUrl.searchParams);
+      const skip = (page - 1) * limit;
+
+      const [items, total] = await Promise.all([
+        Lead.find(filter).populate("assignedTo").sort({ followUpDate: 1, status: 1, createdAt: -1 }).skip(skip).limit(limit),
+        Lead.countDocuments(filter),
+      ]);
+
+      return ok({
+        leads: items,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      });
+    }
+
+    return methodNotAllowed(["GET", "POST"]);
+  }
+
+  if (first === "bulk") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    const body = (await parseJson<LeadBody>(request)) ?? {};
+    const leads = Array.isArray(body.leads) ? body.leads : Array.isArray(body) ? body : null;
+
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return fail("Lead array is required", 400);
+    }
+
+    try {
+      const created = await Lead.insertMany(leads, { ordered: false });
+      return json({ success: true, data: { leads: created } }, 201);
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : "Unable to bulk create leads", 400);
+    }
+  }
+
+  if (first === "my") {
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    if (second === "today-followups") {
+      if (request.method !== "GET") return methodNotAllowed(["GET"]);
+      const { start, end } = getIstDayRange();
+      const leads = await Lead.find({
+        assignedTo: payload.id,
+        followUpDate: { $gte: start, $lte: end },
+      }).sort({ followUpDate: 1 });
+
+      return ok({ leads });
+    }
+
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+    const status = request.nextUrl.searchParams.get("status");
+    const filter: Record<string, unknown> = { assignedTo: payload.id };
+    if (status) filter.status = status;
+
+    const leads = await Lead.find(filter).sort({ followUpDate: 1, status: 1, createdAt: -1 });
+    return ok({ leads });
+  }
+
+  if (first === "auto-assign") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    const employees = await User.find({ role: "employee", isActive: true }).sort({ createdAt: 1 });
+    const unassignedLeads = await Lead.find({ assignedTo: null }).sort({ createdAt: 1 });
+
+    if (employees.length === 0) {
+      return fail("No active employees found", 400);
+    }
+
+    const updates = unassignedLeads.map((lead, index) => ({
+      updateOne: {
+        filter: { _id: lead._id },
+        update: { assignedTo: employees[index % employees.length]._id },
+      },
+    }));
+
+    if (updates.length) {
+      await Lead.bulkWrite(updates);
+    }
+
+    const leadIds = unassignedLeads.map((lead) => lead._id);
+    const assigned = await Lead.find({ _id: { $in: leadIds } }).populate("assignedTo");
+    return ok({ assignedCount: assigned.length, leads: assigned });
+  }
+
+  if (second) {
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    return handleLeadDetailAction(request, first, second, payload);
+  }
+
+  if (request.method === "GET") {
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    if (payload.role !== "admin") {
+      return forbidden();
+    }
+
+    if (!isValidObjectId(first)) {
+      return fail("Invalid lead id", 400);
+    }
+
+    try {
+      const lead = await Lead.findById(first);
+      if (!lead) return notFound("Lead not found");
+      return ok({ lead });
+    } catch {
+      return fail("Invalid lead id", 400);
+    }
+  }
+
+  return methodNotAllowed(["GET"]);
+}
+
+async function handleUsers(request: NextRequest, segments: string[]) {
+  const [first] = segments;
+
+  if (first === "employees") {
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    const employees = await User.find({ role: "employee" }).lean();
+    const allLeads = await Lead.find().lean();
+
+    const countsByEmployee = new Map<
+      string,
+      {
+        totalLeads: number;
+        activeLeads: number;
+        calledLeads: number;
+        interestedLeads: number;
+        closedLeads: number;
+      }
+    >();
+
+    for (const lead of allLeads) {
+      if (!lead.assignedTo) continue;
+      const key = lead.assignedTo.toString();
+      const existing = countsByEmployee.get(key) ?? {
+        totalLeads: 0,
+        activeLeads: 0,
+        calledLeads: 0,
+        interestedLeads: 0,
+        closedLeads: 0,
+      };
+
+      existing.totalLeads += 1;
+      if (["new", "called", "interested", "callback", "proposal_sent"].includes(lead.status)) {
+        existing.activeLeads += 1;
+      }
+      if (lead.status === "called") existing.calledLeads += 1;
+      if (lead.status === "interested") existing.interestedLeads += 1;
+      if (["closed_won", "closed_lost"].includes(lead.status)) existing.closedLeads += 1;
+      countsByEmployee.set(key, existing);
+    }
+
+    return ok({
+      employees: employees.map((employee) => {
+        const stats = countsByEmployee.get(employee._id.toString());
+        return {
+          ...employee,
+          totalLeads: stats?.totalLeads ?? 0,
+          activeLeads: stats?.activeLeads ?? 0,
+          callsMade: stats?.calledLeads ?? 0,
+          interestedLeads: stats?.interestedLeads ?? 0,
+          closedLeads: stats?.closedLeads ?? 0,
+        };
+      }),
+    });
+  }
+
+  if (first === "create") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    const body = (await parseJson<LeadBody>(request)) ?? {};
+    const { name, email, password, phone } = body as {
+      name?: string;
+      email?: string;
+      password?: string;
+      phone?: string;
+    };
+
+    if (!name || !email || !password) {
+      return fail("Name, email, and password are required", 400);
+    }
+
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existing) {
+      return fail("Email already exists", 409);
+    }
+
+    try {
+      const employee = await User.create({
+        name,
+        email,
+        password,
+        phone,
+        role: "employee",
+      });
+
+      return json(
+        {
+          success: true,
+          data: {
+            user: {
+              id: employee._id.toString(),
+              name: employee.name,
+              email: employee.email,
+              phone: employee.phone,
+              role: employee.role,
+            },
+          },
+        },
+        201
+      );
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : "Unable to create employee", 400);
+    }
+  }
+
+  if (first && request.method === "PATCH") {
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    if (!isValidObjectId(first)) {
+      return fail("Invalid employee id", 400);
+    }
+
+    const body = (await parseJson<Record<string, unknown>>(request)) ?? {};
+    const updates: Record<string, unknown> = {};
+
+    if (typeof body.name === "string") updates.name = body.name;
+    if (typeof body.email === "string") updates.email = body.email;
+    if (typeof body.phone === "string") updates.phone = body.phone;
+    if (typeof body.isActive === "boolean") updates.isActive = body.isActive;
+
+    const user = await User.findByIdAndUpdate(first, updates, { new: true });
+
+    if (!user) {
+      return notFound("Employee not found");
+    }
+
+    return ok({ user });
+  }
+
+  return notFound("Users route not found");
+}
+
+async function handleStats(request: NextRequest) {
+  if (request.method !== "GET") return methodNotAllowed(["GET"]);
+  const payload = await requireAdmin(request);
+  if (!payload) return unauthorized();
+
+  const [totalLeads, statusGroups, nicheGroups, employeeGroups, wonCount, employeeCount] = await Promise.all([
+    Lead.countDocuments(),
+    Lead.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
+    Lead.aggregate([{ $group: { _id: "$niche", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+    Lead.aggregate([
+      { $lookup: { from: "users", localField: "assignedTo", foreignField: "_id", as: "employee" } },
+      { $unwind: { path: "$employee", preserveNullAndEmptyArrays: true } },
+      { $group: { _id: "$assignedTo", name: { $first: "$employee.name" }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]),
+    Lead.countDocuments({ status: "closed_won" }),
+    User.countDocuments({ role: "employee", isActive: true }),
+  ]);
+
+  const { start, end } = getIstDayRange();
+  const todayFollowUps = await Lead.countDocuments({
+    followUpDate: { $gte: start, $lte: end },
+  });
+
+  const conversionRate = totalLeads === 0 ? 0 : Math.round((wonCount / totalLeads) * 100);
+
+  return ok({
+    summary: {
+      totalLeads,
+      todayFollowUps,
+      hotLeads: await Lead.countDocuments({ leadQuality: "hot" }),
+      closedWon: wonCount,
+      conversionRate,
+      employees: employeeCount,
+    },
+    leadsByStatus: statusGroups,
+    leadsByNiche: nicheGroups,
+    leadsByEmployee: employeeGroups,
+  });
+}
+
+async function handleRequest(request: NextRequest) {
+  const segments = getSegments(request);
+
+  if (segments.length === 0) {
+    return notFound("API route not found");
+  }
+
+  await connectDatabase();
+
+  const [section, ...rest] = segments;
+
+  try {
+    if (section === "auth") return handleAuth(request, rest);
+    if (section === "leads") return handleLeads(request, rest);
+    if (section === "users") return handleUsers(request, rest);
+    if (section === "stats") return handleStats(request);
+    return notFound("API route not found");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Unexpected server error", 500);
+  }
+}
+
+export function GET(request: NextRequest) {
+  return handleRequest(request);
+}
+
+export function POST(request: NextRequest) {
+  return handleRequest(request);
+}
+
+export function PATCH(request: NextRequest) {
+  return handleRequest(request);
+}
+
+export function PUT(request: NextRequest) {
+  return handleRequest(request);
+}
+
+export function DELETE(request: NextRequest) {
+  return handleRequest(request);
+}
+
+export function OPTIONS() {
+  return new NextResponse(null, { status: 204 });
+}
