@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
+import { env } from "@/lib/env";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Expecto CRM",
   description: "Expecto CRM for lead tracking, follow-ups, and team performance",
+  metadataBase: new URL(env.siteUrl),
   icons: {
     icon: "/img/logo.png",
   },

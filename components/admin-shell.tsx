@@ -17,6 +17,10 @@ const navItems = [
   { href: "/admin/employees", label: "Employees", icon: Users },
 ];
 
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 const fetcher = async () => (await apiFetch<{ user: { name: string; role: string } }>("/auth/me")).data?.user;
 
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -41,14 +45,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
         <nav className="mt-8 space-y-2">
           {navItems.map(({ href, label, icon: Icon }) => {
-            const active = pathname.startsWith(href);
+            const active = isActivePath(pathname, href);
             return (
               <Link
                 key={href}
                 href={href}
                 className={cn(
                   "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                  active ? "bg-slate-950 text-white" : "text-slate-700 hover:bg-slate-100"
+                  active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-200" : "text-slate-700 hover:bg-slate-100"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -82,14 +86,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white/96 px-2 py-2 backdrop-blur xl:hidden">
           {navItems.map(({ href, label, icon: Icon }) => {
-            const active = pathname.startsWith(href);
+            const active = isActivePath(pathname, href);
             return (
               <Link
                 key={href}
                 href={href}
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-[11px] font-semibold transition",
-                  active ? "text-slate-950" : "text-slate-500"
+                  active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-200" : "text-slate-500"
                 )}
               >
                 <Icon className="h-5 w-5" />

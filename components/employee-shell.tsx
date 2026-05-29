@@ -15,6 +15,10 @@ const navItems = [
   { href: "/leads", label: "Leads", icon: ListChecks },
 ];
 
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 const fetcher = async () => (await apiFetch<{ user: { name: string; role: string } }>("/auth/me")).data?.user;
 
 export function EmployeeShell({ children }: { children: ReactNode }) {
@@ -46,14 +50,14 @@ export function EmployeeShell({ children }: { children: ReactNode }) {
 
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 border-t border-slate-200 bg-white/96 px-3 py-2 backdrop-blur">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href);
+          const active = isActivePath(pathname, href);
           return (
             <Link
               key={href}
               href={href}
               className={cn(
                 "flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold transition",
-                active ? "bg-slate-950 text-white" : "text-slate-600"
+                active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-200" : "text-slate-600"
               )}
             >
               <Icon className="h-4 w-4" />

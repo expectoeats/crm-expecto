@@ -30,6 +30,7 @@ Set these env vars on Vercel:
 - `JWT_SECRET=your-long-random-secret`
 - `JWT_EXPIRES_IN=7d`
 - `COOKIE_NAME=expectocrm_token`
+- `NEXT_PUBLIC_SITE_URL=https://crm-expecto.vercel.app`
 
 You do not need a separate backend host or `API_BASE_URL` anymore.
 
