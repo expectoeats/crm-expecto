@@ -23,11 +23,16 @@ function isActivePath(pathname: string, href: string) {
 }
 
 const fetcher = async () => (await apiFetch<{ user: { name: string; role: string } }>("/auth/me")).data?.user;
+const resetRequestFetcher = async () =>
+  (await apiFetch<{ employees: Array<{ passwordResetRequested?: boolean }> }>("/users/employees")).data?.employees?.filter(
+    (employee) => employee.passwordResetRequested
+  ).length ?? 0;
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: user } = useSWR("admin-me", fetcher);
+  const { data: resetRequestCount = 0 } = useSWR("admin-password-reset-count", resetRequestFetcher);
 
   async function handleLogout() {
     await apiFetch("/auth/logout", { method: "POST" });
@@ -57,7 +62,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 )}
               >
                 <Icon className="h-4 w-4" />
-                {label}
+                <span className="flex-1">{label}</span>
+                {href === "/admin/employees" && resetRequestCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                    {resetRequestCount}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -99,13 +109,18 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-[11px] font-semibold transition",
+                  "relative flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-[11px] font-semibold transition",
                   active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-200" : "text-slate-500"
                 )}
-              >
-                <Icon className="h-5 w-5" />
-                {label}
-              </Link>
+                >
+                  <Icon className="h-5 w-5" />
+                  <span>{label}</span>
+                  {href === "/admin/employees" && resetRequestCount > 0 ? (
+                    <span className="absolute right-4 top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {resetRequestCount}
+                    </span>
+                  ) : null}
+                </Link>
             );
           })}
         </nav>

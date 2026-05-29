@@ -9,6 +9,8 @@ const userSchema = new Schema(
     role: { type: String, enum: ["admin", "employee"], default: "employee", required: true },
     phone: { type: String, trim: true },
     isActive: { type: Boolean, default: true },
+    passwordResetRequested: { type: Boolean, default: false },
+    passwordResetRequestedAt: { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

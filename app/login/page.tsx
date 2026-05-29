@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, KeyRound, X } from "lucide-react";
 import { Button, Card, Input } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { BrandMark } from "@/components/brand-mark";
@@ -14,6 +14,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotError, setForgotError] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,6 +38,25 @@ export default function LoginPage() {
       setError(loginError instanceof Error ? loginError.message : "Login failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setForgotLoading(true);
+    setForgotMessage("");
+    setForgotError("");
+
+    try {
+      const response = await apiFetch("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      setForgotMessage(response.message ?? "Request sent to admin.");
+    } catch (forgotPasswordError) {
+      setForgotError(forgotPasswordError instanceof Error ? forgotPasswordError.message : "Unable to send request");
+    } finally {
+      setForgotLoading(false);
     }
   }
 
@@ -67,9 +91,43 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Login"}
               <ArrowRight className="h-4 w-4" />
             </Button>
+            <Button type="button" variant="ghost" className="h-11 w-full" onClick={() => {
+              setForgotEmail(email);
+              setForgotMessage("");
+              setForgotError("");
+              setShowForgotPassword(true);
+            }}>
+              <KeyRound className="h-4 w-4" />
+              Forgot password
+            </Button>
           </form>
         </Card>
       </div>
+
+      {showForgotPassword ? (
+        <div className="fixed inset-0 z-40 flex items-end bg-slate-950/40 sm:items-center sm:justify-center">
+          <div className="w-full rounded-t-[28px] bg-white p-4 shadow-2xl sm:max-w-md sm:rounded-[28px]">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" />
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-950">Forgot password</h2>
+                <p className="mt-1 text-sm text-slate-600">Admin ko reset request bhej di jayegi.</p>
+              </div>
+              <Button variant="ghost" onClick={() => setShowForgotPassword(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <form className="mt-4 space-y-3" onSubmit={handleForgotPassword}>
+              <Input type="email" placeholder="Employee email" value={forgotEmail} onChange={(event) => setForgotEmail(event.target.value)} required />
+              {forgotError ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{forgotError}</p> : null}
+              {forgotMessage ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{forgotMessage}</p> : null}
+              <Button className="w-full" type="submit" disabled={forgotLoading}>
+                {forgotLoading ? "Sending..." : "Send request"}
+              </Button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

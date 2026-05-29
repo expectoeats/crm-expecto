@@ -20,6 +20,14 @@ type LoginBody = {
   password?: string;
 };
 
+type PasswordBody = {
+  email?: string;
+  currentPassword?: string;
+  newPassword?: string;
+  mode?: string;
+  password?: string;
+};
+
 type LeadBody = Record<string, unknown> & {
   leads?: unknown;
   assignedTo?: string | null;
@@ -31,6 +39,8 @@ type LeadBody = Record<string, unknown> & {
   duration?: string;
   connected?: boolean;
 };
+
+const defaultEmployeePassword = process.env.DEFAULT_EMPLOYEE_PASSWORD ?? "employee123";
 
 const callOutcomeStatus: Record<string, string> = {
   deal_done: "closed_won",
@@ -217,6 +227,58 @@ async function handleAuth(request: NextRequest, segments: string[]) {
     const response = ok(undefined, "Logged out successfully");
     response.cookies.set(cookieName, "", { ...authCookieOptions(), maxAge: 0 });
     return response;
+  }
+
+  if (action === "change-password") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    const body = (await parseJson<PasswordBody>(request)) ?? {};
+    const currentPassword = body.currentPassword;
+    const newPassword = body.newPassword;
+
+    if (!currentPassword || !newPassword) {
+      return fail("Current password and new password are required", 400);
+    }
+
+    if (newPassword.length < 6) {
+      return fail("New password must be at least 6 characters", 400);
+    }
+
+    const user = await User.findById(payload.id).select("+password");
+    if (!user) return notFound("User not found");
+
+    const passwordMatches = await user.comparePassword(currentPassword);
+    if (!passwordMatches) {
+      return fail("Current password is incorrect", 401);
+    }
+
+    user.password = newPassword;
+    user.passwordResetRequested = false;
+    user.passwordResetRequestedAt = null;
+    await user.save();
+
+    return ok(undefined, "Password updated successfully");
+  }
+
+  if (action === "forgot-password") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+
+    const body = (await parseJson<PasswordBody>(request)) ?? {};
+    const email = body.email?.toLowerCase().trim();
+
+    if (!email) {
+      return fail("Email is required", 400);
+    }
+
+    await User.findOneAndUpdate(
+      { email, role: "employee", isActive: true },
+      { passwordResetRequested: true, passwordResetRequestedAt: new Date() }
+    );
+
+    return ok(undefined, "If this employee exists, the admin will see the reset request.");
   }
 
   if (action === "me") {
@@ -494,7 +556,7 @@ async function handleLeads(request: NextRequest, segments: string[]) {
 }
 
 async function handleUsers(request: NextRequest, segments: string[]) {
-  const [first] = segments;
+  const [first, second] = segments;
 
   if (first === "employees") {
     if (request.method !== "GET") return methodNotAllowed(["GET"]);
@@ -541,6 +603,8 @@ async function handleUsers(request: NextRequest, segments: string[]) {
         const stats = countsByEmployee.get(employee._id.toString());
         return {
           ...employee,
+          passwordResetRequested: employee.passwordResetRequested ?? false,
+          passwordResetRequestedAt: employee.passwordResetRequestedAt ?? null,
           totalLeads: stats?.totalLeads ?? 0,
           activeLeads: stats?.activeLeads ?? 0,
           callsMade: stats?.calledLeads ?? 0,
@@ -549,6 +613,36 @@ async function handleUsers(request: NextRequest, segments: string[]) {
         };
       }),
     });
+  }
+
+  if (first && second === "password-reset") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    if (!isValidObjectId(first)) {
+      return fail("Invalid employee id", 400);
+    }
+
+    const body = (await parseJson<PasswordBody>(request)) ?? {};
+    const mode = body.mode === "custom" ? "custom" : "default";
+    const nextPassword = mode === "custom" ? body.password?.trim() : defaultEmployeePassword;
+
+    if (!nextPassword || nextPassword.length < 6) {
+      return fail("Password must be at least 6 characters", 400);
+    }
+
+    const user = await User.findOne({ _id: first, role: "employee" }).select("+password");
+    if (!user) {
+      return notFound("Employee not found");
+    }
+
+    user.password = nextPassword;
+    user.passwordResetRequested = false;
+    user.passwordResetRequestedAt = null;
+    await user.save();
+
+    return ok({ defaultPassword: mode === "default" ? defaultEmployeePassword : undefined }, "Password reset successfully");
   }
 
   if (first === "create") {
