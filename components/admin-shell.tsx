@@ -9,6 +9,7 @@ import { Button, Card } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { cn } from "@/lib/ui";
 import { BrandMark } from "@/components/brand-mark";
+import { InstallAppButton } from "@/components/install-app-button";
 
 const navItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -65,6 +66,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <Card className="mt-auto border-slate-200/80 bg-white/95">
           <p className="text-sm font-semibold text-slate-950">Signed in as</p>
           <p className="mt-1 text-sm text-slate-600">{user?.name ?? "Loading..."}</p>
+          <div className="mt-4">
+            <InstallAppButton />
+          </div>
           <Button className="mt-4 w-full" variant="secondary" onClick={handleLogout}>
             <LogOut className="h-4 w-4" />
             Logout
@@ -76,9 +80,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <div className="border-b border-slate-200/70 bg-white/78 px-4 py-4 backdrop-blur xl:hidden">
           <div className="flex items-center justify-between">
             <BrandMark size="sm" />
-            <Button variant="secondary" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <InstallAppButton compact />
+              <Button variant="secondary" onClick={handleLogout}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 

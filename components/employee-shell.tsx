@@ -9,6 +9,7 @@ import { Button } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { cn } from "@/lib/ui";
 import { BrandMark } from "@/components/brand-mark";
+import { InstallAppButton } from "@/components/install-app-button";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: House },
@@ -40,9 +41,12 @@ export function EmployeeShell({ children }: { children: ReactNode }) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500">Expecto CRM</p>
             <p className="text-lg font-semibold text-slate-950">Hi, {user?.name ?? "..."}</p>
           </div>
-          <Button variant="secondary" onClick={handleLogout}>
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <InstallAppButton compact />
+            <Button variant="secondary" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 

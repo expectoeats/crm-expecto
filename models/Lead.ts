@@ -4,6 +4,7 @@ const callLogSchema = new Schema(
   {
     calledBy: { type: Schema.Types.ObjectId, ref: "User" },
     calledAt: { type: Date, default: Date.now },
+    connected: { type: Boolean, default: false },
     duration: { type: String },
     outcome: { type: String, trim: true },
     notes: { type: String, trim: true },
@@ -51,4 +52,3 @@ leadSchema.index({ assignedTo: 1, status: 1, followUpDate: 1 });
 export type LeadDocument = InferSchemaType<typeof leadSchema>;
 
 export const Lead = (models.Lead as mongoose.Model<LeadDocument>) || model<LeadDocument>("Lead", leadSchema);
-

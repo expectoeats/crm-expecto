@@ -29,6 +29,18 @@ type LeadBody = Record<string, unknown> & {
   notes?: string;
   outcome?: string;
   duration?: string;
+  connected?: boolean;
+};
+
+const callOutcomeStatus: Record<string, string> = {
+  deal_done: "closed_won",
+  connected_interested: "interested",
+  callback_requested: "callback",
+  proposal_sent: "proposal_sent",
+  no_answer: "called",
+  busy: "callback",
+  wrong_number: "not_interested",
+  not_interested: "not_interested",
 };
 
 function json(
@@ -270,21 +282,28 @@ async function handleLeadDetailAction(
   if (action === "calllog") {
     if (request.method !== "POST") return methodNotAllowed(["POST"]);
     const body = (await parseJson<LeadBody>(request)) ?? {};
+    const update: Record<string, unknown> = {
+      $push: {
+        callLogs: {
+          calledBy: payload.id,
+          calledAt: new Date(),
+          connected: Boolean(body.connected),
+          notes: body.notes ?? "",
+          outcome: body.outcome ?? "",
+          duration: body.duration ?? "",
+        },
+      },
+      status: callOutcomeStatus[String(body.outcome ?? "")] ?? "called",
+    };
+
+    if (body.followUpDate || body.followUpNote) {
+      update.followUpDate = body.followUpDate ? new Date(body.followUpDate) : null;
+      update.followUpNote = body.followUpNote ?? "";
+    }
 
     const updatedLead = await Lead.findByIdAndUpdate(
       leadId,
-      {
-        $push: {
-          callLogs: {
-            calledBy: payload.id,
-            calledAt: new Date(),
-            notes: body.notes ?? "",
-            outcome: body.outcome ?? "",
-            duration: body.duration ?? "",
-          },
-        },
-        status: "called",
-      },
+      update,
       { new: true }
     );
 
@@ -452,10 +471,6 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     const payload = await requireAuth(request);
     if (!payload) return unauthorized();
 
-    if (payload.role !== "admin") {
-      return forbidden();
-    }
-
     if (!isValidObjectId(first)) {
       return fail("Invalid lead id", 400);
     }
@@ -463,6 +478,12 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     try {
       const lead = await Lead.findById(first);
       if (!lead) return notFound("Lead not found");
+      if (payload.role !== "admin") {
+        const assignedTo = lead.assignedTo?.toString?.();
+        if (!assignedTo || assignedTo !== payload.id) {
+          return forbidden("You do not have access to this lead");
+        }
+      }
       return ok({ lead });
     } catch {
       return fail("Invalid lead id", 400);

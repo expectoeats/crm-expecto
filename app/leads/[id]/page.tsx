@@ -8,6 +8,7 @@ import { EmployeeShell } from "@/components/employee-shell";
 import { Button, Card, EmptyState, Input, Select, Textarea } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, StatusBadge, WebsiteStatusBadge } from "@/components/badges";
 import { LeadTimeline, type LeadRecord } from "@/components/lead-utils";
+import { CallUpdateModal } from "@/components/call-update-modal";
 import { apiFetch } from "@/lib/http";
 import { formatReadableDate } from "@/lib/time";
 import { cn } from "@/lib/ui";
@@ -17,10 +18,8 @@ const fetcher = async (path: string) => (await apiFetch<{ lead: LeadRecord }>(pa
 export default function LeadDetailPage() {
   const params = useParams<{ id: string }>();
   const [status, setStatus] = useState<string | null>(null);
-  const [noteOpen, setNoteOpen] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
   const [followupOpen, setFollowupOpen] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [outcome, setOutcome] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpNote, setFollowUpNote] = useState("");
   const { data: lead, isLoading } = useSWR(params?.id ? `/leads/${params.id}` : null, fetcher);
@@ -32,18 +31,6 @@ export default function LeadDetailPage() {
       body: JSON.stringify({ status: nextStatus }),
     });
     setStatus(nextStatus);
-    await mutate(`/leads/${lead._id}`);
-  }
-
-  async function saveCallLog() {
-    if (!lead) return;
-    await apiFetch(`/leads/${lead._id}/calllog`, {
-      method: "POST",
-      body: JSON.stringify({ notes, outcome }),
-    });
-    setNotes("");
-    setOutcome("");
-    setNoteOpen(false);
     await mutate(`/leads/${lead._id}`);
   }
 
@@ -90,7 +77,7 @@ export default function LeadDetailPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Lead identity</p>
             <h1 className="mt-2 text-2xl font-semibold text-slate-950">{lead.name}</h1>
             <p className="mt-1 text-sm text-slate-600">
-              {lead.ownerName ?? "Owner not added"} Â· {lead.city ?? "City not added"}
+              {lead.ownerName ?? "Owner not added"} · {lead.city ?? "City not added"}
             </p>
           </div>
 
@@ -172,14 +159,15 @@ export default function LeadDetailPage() {
         <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto] gap-2">
           <a
             href={`tel:${lead.phone}`}
+            onClick={() => setCallOpen(true)}
             className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white"
           >
             <PhoneCall className="h-4 w-4" />
             Call
           </a>
-          <Button variant="secondary" className="min-h-[52px]" onClick={() => setNoteOpen(true)}>
+          <Button variant="secondary" className="min-h-[52px]" onClick={() => setCallOpen(true)}>
             <StickyNote className="h-4 w-4" />
-            Add note
+            Update
           </Button>
         </div>
 
@@ -197,27 +185,7 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
-      {noteOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-slate-950/40">
-          <div className="w-full rounded-t-[28px] bg-white p-4 shadow-2xl">
-            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200" />
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-950">Add call note</h2>
-              <Button variant="ghost" onClick={() => setNoteOpen(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="mt-4 space-y-3">
-              <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Write the call notes here..." />
-              <Input value={outcome} onChange={(event) => setOutcome(event.target.value)} placeholder="Outcome" />
-              <Button className="w-full" onClick={saveCallLog}>
-                <Save className="h-4 w-4" />
-                Save note
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <CallUpdateModal lead={lead} open={callOpen} onClose={() => setCallOpen(false)} onSaved={() => mutate(`/leads/${lead._id}`)} />
 
       {followupOpen ? (
         <div className="fixed inset-0 z-40 flex items-end bg-slate-950/40">
