@@ -77,7 +77,7 @@ export default function LeadDetailPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Lead identity</p>
             <h1 className="mt-2 text-2xl font-semibold text-slate-950">{lead.name}</h1>
             <p className="mt-1 text-sm text-slate-600">
-              {lead.ownerName ?? "Owner not added"} · {lead.city ?? "City not added"}
+              {lead.ownerName ?? "Owner not added"} Â· {lead.city ?? "City not added"}
             </p>
           </div>
 
