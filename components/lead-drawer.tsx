@@ -373,7 +373,6 @@ export function LeadDrawer({
                 <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Change Status</p>
                 {cfg ? (
                   <div className={cn("flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ring-1", cfg.className)}>
-                    <span>{cfg.emoji}</span>
                     {cfg.label}
                   </div>
                 ) : null}

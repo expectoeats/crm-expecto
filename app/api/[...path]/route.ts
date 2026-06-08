@@ -717,26 +717,32 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     if (!payload) return unauthorized();
 
     const employees = await User.find({ role: "employee", isActive: true }).sort({ createdAt: 1 });
-    const unassignedLeads = await Lead.find({ assignedTo: null }).sort({ createdAt: 1 });
 
     if (employees.length === 0) {
       return fail("No active employees found", 400);
     }
 
-    const updates = unassignedLeads.map((lead, index) => ({
+    // Assign ALL leads (not just unassigned) round-robin
+    const allLeads = await Lead.find({}).sort({ createdAt: 1 });
+
+    if (allLeads.length === 0) {
+      return fail("No leads found to assign", 400);
+    }
+
+    const updates = allLeads.map((lead, index) => ({
       updateOne: {
         filter: { _id: lead._id },
         update: { assignedTo: employees[index % employees.length]._id },
       },
     }));
 
-    if (updates.length) {
-      await Lead.bulkWrite(updates);
-    }
+    await Lead.bulkWrite(updates);
 
-    const leadIds = unassignedLeads.map((lead) => lead._id);
-    const assigned = await Lead.find({ _id: { $in: leadIds } }).populate("assignedTo");
-    return ok({ assignedCount: assigned.length, leads: assigned });
+    return ok({
+      assignedCount: allLeads.length,
+      employeeCount: employees.length,
+      message: `${allLeads.length} leads assigned across ${employees.length} employees`,
+    });
   }
 
   if (second) {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
-import { Clock, Eye, MessageCircle, PhoneCall, Star } from "lucide-react";
+import { Calendar, CheckCircle, Circle, Clock, Eye, Flame, MessageCircle, Phone, PhoneCall, RefreshCw, Send, Star, ThumbsDown, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge } from "@/components/badges";
@@ -111,12 +111,29 @@ function getInitials(name: string) {
   return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
+const STATUS_ICONS: Record<string, React.ReactNode> = {
+  new:            <Circle className="h-3 w-3" />,
+  reached_out:    <Phone className="h-3 w-3" />,
+  in_talks:       <MessageCircle className="h-3 w-3" />,
+  interested:     <Flame className="h-3 w-3" />,
+  converted:      <CheckCircle className="h-3 w-3" />,
+  not_interested: <X className="h-3 w-3" />,
+  follow_up:      <Calendar className="h-3 w-3" />,
+  called:         <PhoneCall className="h-3 w-3" />,
+  callback:       <RefreshCw className="h-3 w-3" />,
+  proposal_sent:  <Send className="h-3 w-3" />,
+  closed_won:     <Zap className="h-3 w-3" />,
+  closed_lost:    <ThumbsDown className="h-3 w-3" />,
+};
+
 function StatusBadgeNew({ status }: { status: string }) {
-  const cfg = statusConfig[status];
+  const cfg  = statusConfig[status];
+  const icon = STATUS_ICONS[status];
   if (!cfg) return null;
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", cfg.className)}>
-      {cfg.emoji} {cfg.label}
+      {icon}
+      {cfg.label}
     </span>
   );
 }

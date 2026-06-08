@@ -175,7 +175,9 @@ export default function LeadsClient({
           >
             <Bell className="h-5 w-5 shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-bold">⏰ {followUpsToday} Follow-up{followUpsToday !== 1 ? "s" : ""} Today</p>
+              <p className="text-sm font-bold">
+                {followUpsToday} Follow-up{followUpsToday !== 1 ? "s" : ""} Today
+              </p>
               <p className="text-xs text-white/80">Tap to see follow-ups</p>
             </div>
           </button>

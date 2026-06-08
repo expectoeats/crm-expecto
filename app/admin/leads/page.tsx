@@ -50,12 +50,20 @@ function getWaUrl(lead: LeadRecord) {
 function AssignDropdown({ lead, employees, onAssigned }: {
   lead: LeadRecord; employees: Employee[]; onAssigned: () => void;
 }) {
-  const current =
-    typeof lead.assignedTo === "object" && lead.assignedTo !== null
-      ? lead.assignedTo._id
-      : (lead.assignedTo as string | null | undefined) ?? "";
-  const [value, setValue] = useState(current);
+  const resolveAssignee = () => {
+    if (!lead.assignedTo) return "";
+    if (typeof lead.assignedTo === "object") return lead.assignedTo._id;
+    return lead.assignedTo as string;
+  };
+
+  const [value, setValue] = useState(resolveAssignee);
   const [saving, setSaving] = useState(false);
+
+  // sync if lead.assignedTo changes (after mutate)
+  useEffect(() => {
+    setValue(resolveAssignee());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.assignedTo]);
 
   async function assign(v: string) {
     setValue(v);
@@ -76,9 +84,9 @@ function AssignDropdown({ lead, employees, onAssigned }: {
       value={value}
       onChange={(e) => assign(e.target.value)}
       disabled={saving}
-      className="h-8 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-slate-400"
+      className="h-8 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-slate-400 disabled:opacity-60"
     >
-      <option value="">Unassigned</option>
+      <option value="">— Unassigned —</option>
       {employees.map((e) => (
         <option key={e._id} value={e._id}>{e.name}</option>
       ))}
@@ -194,10 +202,10 @@ export default function AdminLeadsPage() {
       {stats ? (
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: "Total",      value: stats.total,       filter: "",           color: "text-slate-800" },
-            { label: "New Today",  value: stats.new_today,   filter: "new",        color: "text-blue-700"  },
-            { label: "Contacted",  value: stats.contacted,   filter: "reached_out",color: "text-emerald-700"},
-            { label: "🔥 Hot",    value: stats.interested,  filter: "interested", color: "text-orange-700"},
+            { label: "Total",     value: stats.total,      filter: "",            color: "text-slate-800" },
+            { label: "New Today", value: stats.new_today,  filter: "new",         color: "text-blue-700"  },
+            { label: "Contacted", value: stats.contacted,  filter: "reached_out", color: "text-emerald-700"},
+            { label: "Interested",value: stats.interested, filter: "interested",  color: "text-orange-700"},
           ].map((s) => (
             <button
               key={s.label}
@@ -465,12 +473,15 @@ function LeadCardAdmin({
           <LeadQualityBadge quality={lead.leadQuality} />
           {cfg ? (
             <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>
-              {cfg.emoji} {cfg.label}
+              {cfg.label}
             </span>
           ) : null}
           {lastContact ? (
-            <span className="text-[11px] text-slate-400">
-              {lastAction === "whatsapped" ? "💬" : "📞"} {lastContact}
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+              {lastAction === "whatsapped"
+                ? <MessageCircle className="h-3 w-3 text-[#1a9e4a]" />
+                : <PhoneCall className="h-3 w-3 text-blue-500" />}
+              {lastContact}
             </span>
           ) : (
             <span className="text-[11px] text-slate-400">Never contacted</span>
