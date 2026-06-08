@@ -4,15 +4,19 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { Download, Grid2X2, List, MessageCircle, PhoneCall, Plus, Search, Shuffle, SlidersHorizontal, Star } from "lucide-react";
 import { Card, EmptyState, Input, Select, SectionTitle, Button, SkeletonCard } from "@/components/ui";
-import { LeadQualityBadge, NicheBadge, StatusBadge } from "@/components/badges";
+import { LeadQualityBadge, NicheBadge } from "@/components/badges";
 import { type LeadRecord } from "@/components/lead-utils";
+import { LeadDrawer } from "@/components/lead-drawer";
 import { apiFetch } from "@/lib/http";
+import { statusConfig, ALL_STATUSES } from "@/lib/ui";
 
 type Employee = { _id: string; name: string };
 type LeadPageResponse = { leads: LeadRecord[]; pagination: { page: number; pages: number; total: number; limit: number } };
+type Stats = { total: number; new_today: number; contacted: number; interested: number; follow_ups_today: number };
 
 const leadsFetcher = async (path: string) => (await apiFetch<LeadPageResponse>(path)).data;
 const employeesFetcher = async () => (await apiFetch<{ employees: Employee[] }>("/users/employees")).data?.employees ?? [];
+const statsFetcher = async () => (await apiFetch<Stats>("/leads/stats")).data ?? null;
 
 function buildCsv(leads: LeadRecord[]) {
   const header = ["Business Name", "Owner", "Phone", "WhatsApp", "Niche", "Status", "Lead Quality", "City", "Rating", "Score"];
@@ -91,12 +95,14 @@ export default function AdminLeadsPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [autoAssigning, setAutoAssigning] = useState(false);
+  const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
 
   const { data, isLoading, mutate } = useSWR(
     `/leads?page=${page}&limit=20&status=${status}&niche=${niche}&assignedTo=${employee}&leadQuality=${leadQuality}&websiteStatus=${websiteStatus}&city=${city}&search=${debouncedSearch}&from=${fromDate}&to=${toDate}`,
     leadsFetcher
   );
   const { data: employees = [] } = useSWR("admin-lead-employees", employeesFetcher);
+  const { data: stats } = useSWR("admin-leads-stats", statsFetcher);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 300);
@@ -162,6 +168,28 @@ export default function AdminLeadsPage() {
         }
       />
 
+      {/* STATS BAR */}
+      {stats ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Total", value: stats.total, filter: "", color: "text-slate-700" },
+            { label: "New Today", value: stats.new_today, filter: "new_today", color: "text-blue-700" },
+            { label: "Contacted", value: stats.contacted, filter: "reached_out", color: "text-emerald-700" },
+            { label: "Interested 🔥", value: stats.interested, filter: "interested", color: "text-orange-700" },
+          ].map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => item.filter && setStatus(item.filter)}
+              className="flex flex-col items-center rounded-2xl bg-white px-3 py-4 text-center ring-1 ring-slate-200 transition hover:bg-slate-50 active:scale-[0.98]"
+            >
+              <span className={`text-2xl font-bold ${item.color}`}>{item.value}</span>
+              <span className="mt-1 text-xs font-semibold text-slate-500">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <Card className="space-y-3">
         <div className="grid gap-3 xl:grid-cols-3">
           <div className="relative xl:col-span-2">
@@ -170,14 +198,9 @@ export default function AdminLeadsPage() {
           </div>
           <Select value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="">All status</option>
-            <option value="new">New</option>
-            <option value="called">Called</option>
-            <option value="interested">Interested</option>
-            <option value="callback">Callback</option>
-            <option value="proposal_sent">Proposal sent</option>
-            <option value="closed_won">Closed won</option>
-            <option value="closed_lost">Closed lost</option>
-            <option value="not_interested">Not interested</option>
+            {ALL_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
           </Select>
         </div>
 
@@ -271,7 +294,14 @@ export default function AdminLeadsPage() {
                   {/* Badges */}
                   <div className="flex flex-wrap items-center gap-2">
                     <LeadQualityBadge quality={lead.leadQuality} />
-                    <StatusBadge status={lead.status} />
+                    {(() => {
+                      const cfg = statusConfig[lead.status];
+                      return cfg ? (
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>
+                          {cfg.emoji} {cfg.label}
+                        </span>
+                      ) : null;
+                    })()}
                     <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-slate-500">
                       <input
                         type="checkbox"
@@ -299,7 +329,7 @@ export default function AdminLeadsPage() {
                   ) : null}
 
                   {/* Action buttons */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <a
                       href={`tel:${lead.phone}`}
                       className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-3 text-sm font-semibold text-white transition active:scale-[0.98]"
@@ -316,6 +346,13 @@ export default function AdminLeadsPage() {
                       <MessageCircle className="h-4 w-4" />
                       WhatsApp
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerLeadId(lead._id)}
+                      className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-slate-100 px-3 text-sm font-semibold text-slate-700 transition active:scale-[0.98]"
+                    >
+                      View
+                    </button>
                   </div>
                 </div>
 
@@ -371,29 +408,28 @@ export default function AdminLeadsPage() {
                     </td>
                     <td className="px-4 py-3"><NicheBadge niche={lead.niche} /></td>
                     <td className="px-4 py-3 text-xs text-slate-600">{lead.phone}</td>
-                    <td className="px-4 py-3"><StatusBadge status={lead.status} /></td>
+                    <td className="px-4 py-3">{(() => {
+                      const cfg = statusConfig[lead.status];
+                      return cfg ? <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>{cfg.emoji} {cfg.label}</span> : <span>{lead.status}</span>;
+                    })()}</td>
                     <td className="px-4 py-3"><LeadQualityBadge quality={lead.leadQuality} /></td>
                     <td className="px-4 py-3 min-w-[160px]">
                       <AssignDropdown lead={lead} employees={employees} onAssigned={() => mutate()} />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-                        <a
-                          href={`tel:${lead.phone}`}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-white"
-                        >
-                          <PhoneCall className="h-3.5 w-3.5" />
-                          Call
+                        <a href={`tel:${lead.phone}`}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-white">
+                          <PhoneCall className="h-3.5 w-3.5" />Call
                         </a>
-                        <a
-                          href={getWhatsAppUrl(lead)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366] px-3 py-2 text-xs font-semibold text-white"
-                        >
-                          <MessageCircle className="h-3.5 w-3.5" />
-                          WA
+                        <a href={getWhatsAppUrl(lead)} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366] px-3 py-2 text-xs font-semibold text-white">
+                          <MessageCircle className="h-3.5 w-3.5" />WA
                         </a>
+                        <button type="button" onClick={() => setDrawerLeadId(lead._id)}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                          View
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -419,6 +455,12 @@ export default function AdminLeadsPage() {
           </Button>
         </div>
       ) : null}
+
+      <LeadDrawer
+        leadId={drawerLeadId}
+        onClose={() => setDrawerLeadId(null)}
+        onUpdated={() => mutate()}
+      />
     </div>
   );
 }

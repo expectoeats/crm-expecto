@@ -44,12 +44,12 @@ type LeadBody = Record<string, unknown> & {
 const defaultEmployeePassword = process.env.DEFAULT_EMPLOYEE_PASSWORD ?? "employee123";
 
 const callOutcomeStatus: Record<string, string> = {
-  deal_done: "closed_won",
+  deal_done: "converted",
   connected_interested: "interested",
-  callback_requested: "callback",
-  proposal_sent: "proposal_sent",
-  no_answer: "called",
-  busy: "callback",
+  callback_requested: "follow_up",
+  proposal_sent: "in_talks",
+  no_answer: "reached_out",
+  busy: "follow_up",
   wrong_number: "not_interested",
   not_interested: "not_interested",
 };
@@ -391,6 +391,58 @@ async function handleLeadDetailAction(
     }
   }
 
+  if (action === "contact-action") {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    const body = (await parseJson<Record<string, unknown>>(request)) ?? {};
+    const contactAction = body.action === "whatsapped" ? "whatsapped" : "called";
+    const note = typeof body.note === "string" ? body.note : "";
+
+    // Don't downgrade status if already contacted
+    const currentLead = await Lead.findById(leadId).lean();
+    if (!currentLead) return notFound("Lead not found");
+
+    const isNewStatus = (currentLead as Record<string, unknown>).status === "new";
+    const updateObj: Record<string, unknown> = {
+      last_contacted_at: new Date(),
+      last_contacted_by: payload.name,
+      last_action: contactAction,
+      $push: {
+        contact_history: {
+          action: contactAction,
+          by_name: payload.name,
+          by_id: payload.id,
+          at: new Date(),
+          note,
+        },
+      },
+    };
+
+    // Only upgrade "new" → "reached_out", never downgrade
+    if (isNewStatus) {
+      updateObj.status = "reached_out";
+    }
+
+    const updatedLead = await Lead.findByIdAndUpdate(leadId, updateObj, { new: true });
+    return ok({ lead: normalizeLead(updatedLead?.toObject() ?? {}) });
+  }
+
+  if (action === "note") {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    const body = (await parseJson<Record<string, unknown>>(request)) ?? {};
+    const historyEntryId = body.history_entry_id;
+    const note = body.note ?? "";
+
+    if (!historyEntryId) return fail("history_entry_id is required", 400);
+
+    const updatedLead = await Lead.findOneAndUpdate(
+      { _id: leadId, "contact_history._id": historyEntryId },
+      { $set: { "contact_history.$.note": note } },
+      { new: true }
+    );
+
+    return ok({ lead: normalizeLead(updatedLead?.toObject() ?? {}) });
+  }
+
   if (action === "status") {
     if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
     const body = (await parseJson<LeadBody>(request)) ?? {};
@@ -583,6 +635,55 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       return json({ success: true, data: { leads: created, insertedCount: created.length } }, 201);
     } catch (error) {
       return fail(error instanceof Error ? error.message : "Unable to bulk create leads", 400);
+    }
+  }
+
+  if (first === "recent-updates") {
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    const since = request.nextUrl.searchParams.get("since");
+    if (!since) return fail("since query param required", 400);
+
+    const sinceDate = new Date(since);
+    if (isNaN(sinceDate.getTime())) return fail("Invalid since date", 400);
+
+    const filter: Record<string, unknown> = { updatedAt: { $gt: sinceDate } };
+    // Employees only see their own leads
+    if (payload.role !== "admin") {
+      filter.assignedTo = payload.id;
+    }
+
+    const leads = await Lead.find(filter).sort({ updatedAt: -1 }).limit(50);
+    return ok({ leads: normalizeLeads(leads.map((doc) => doc.toObject())) });
+  }
+
+  if (first === "stats") {
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+    const authPayload = await requireAuth(request);
+    if (!authPayload) return unauthorized();
+
+    const { start, end } = getIstDayRange();
+
+    if (authPayload.role === "admin") {
+      const [total, newToday, contacted, interested, followUpsToday] = await Promise.all([
+        Lead.countDocuments(),
+        Lead.countDocuments({ createdAt: { $gte: start, $lte: end } }),
+        Lead.countDocuments({ status: { $in: ["reached_out", "in_talks", "interested", "converted", "called", "callback", "proposal_sent"] } }),
+        Lead.countDocuments({ status: { $in: ["interested", "in_talks"] } }),
+        Lead.countDocuments({ followUpDate: { $gte: start, $lte: end } }),
+      ]);
+      return ok({ total, new_today: newToday, contacted, interested, follow_ups_today: followUpsToday });
+    } else {
+      const [total, newToday, contacted, interested, followUpsToday] = await Promise.all([
+        Lead.countDocuments({ assignedTo: authPayload.id }),
+        Lead.countDocuments({ assignedTo: authPayload.id, createdAt: { $gte: start, $lte: end } }),
+        Lead.countDocuments({ assignedTo: authPayload.id, status: { $in: ["reached_out", "in_talks", "interested", "converted", "called", "callback", "proposal_sent"] } }),
+        Lead.countDocuments({ assignedTo: authPayload.id, status: { $in: ["interested", "in_talks"] } }),
+        Lead.countDocuments({ assignedTo: authPayload.id, followUpDate: { $gte: start, $lte: end } }),
+      ]);
+      return ok({ total, new_today: newToday, contacted, interested, follow_ups_today: followUpsToday });
     }
   }
 

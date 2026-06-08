@@ -24,7 +24,7 @@ function isActivePath(pathname: string, href: string) {
 
 const fetcher = async () => (await apiFetch<{ user: { name: string; role: string } }>("/auth/me")).data?.user;
 
-export function EmployeeShell({ children }: { children: ReactNode }) {
+export function EmployeeShell({ children, followUpCount = 0 }: { children: ReactNode; followUpCount?: number }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: user } = useSWR("employee-me", fetcher);
@@ -144,12 +144,17 @@ export function EmployeeShell({ children }: { children: ReactNode }) {
               key={href}
               href={href}
               className={cn(
-                "flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold transition",
+                "relative flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold transition",
                 active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-200" : "text-slate-600"
               )}
             >
               <Icon className="h-4 w-4" />
               {label}
+              {href === "/leads" && followUpCount > 0 ? (
+                <span className="absolute right-6 top-2 inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 py-0.5 text-[10px] font-bold text-white">
+                  {followUpCount > 9 ? "9+" : followUpCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}

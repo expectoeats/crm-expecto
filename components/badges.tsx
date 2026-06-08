@@ -1,14 +1,32 @@
 "use client";
 
 import { Badge } from "@/components/ui";
-import { leadQualityStyles, statusStyles, websiteStatusLabels } from "@/lib/ui";
+import { leadQualityStyles, statusConfig, websiteStatusLabels } from "@/lib/ui";
 
 export function StatusBadge({ status }: { status: string }) {
-  return <Badge className={statusStyles[status] ?? "bg-slate-100 text-slate-700 ring-slate-200"}>{status.replaceAll("_", " ")}</Badge>;
+  const cfg = statusConfig[status];
+  if (cfg) {
+    return (
+      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>
+        {cfg.emoji} {cfg.label}
+      </span>
+    );
+  }
+  return <Badge className="bg-slate-100 text-slate-700 ring-slate-200">{status.replaceAll("_", " ")}</Badge>;
 }
 
 export function LeadQualityBadge({ quality }: { quality: string }) {
-  return <Badge className={leadQualityStyles[quality] ?? "bg-slate-100 text-slate-700 ring-slate-200"}>{quality.toUpperCase()}</Badge>;
+  const styles: Record<string, { className: string; label: string }> = {
+    hot:  { className: "bg-red-100 text-red-800 ring-red-200",     label: "🔥 HOT"  },
+    warm: { className: "bg-amber-100 text-amber-800 ring-amber-200", label: "☀️ WARM" },
+    cold: { className: "bg-sky-100 text-sky-800 ring-sky-200",      label: "❄️ COLD" },
+  };
+  const cfg = styles[quality];
+  return (
+    <Badge className={cfg?.className ?? "bg-slate-100 text-slate-700 ring-slate-200"}>
+      {cfg?.label ?? quality.toUpperCase()}
+    </Badge>
+  );
 }
 
 export function WebsiteStatusBadge({ websiteStatus }: { websiteStatus: string }) {
@@ -33,4 +51,3 @@ export function NicheBadge({ niche }: { niche: string }) {
   const hash = niche.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return <Badge className={palette[hash % palette.length]}>{niche}</Badge>;
 }
-
