@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { Download, Grid2X2, List, MessageCircle, PhoneCall, Plus, Search, Shuffle, SlidersHorizontal, Star } from "lucide-react";
+import {
+  ChevronDown, ChevronLeft, ChevronRight, Download, Filter,
+  MessageCircle, PhoneCall, Plus, Search, Shuffle, Star, X,
+} from "lucide-react";
 import { Card, EmptyState, Input, Select, SectionTitle, Button, SkeletonCard } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge } from "@/components/badges";
 import { type LeadRecord } from "@/components/lead-utils";
@@ -11,50 +14,56 @@ import { apiFetch } from "@/lib/http";
 import { statusConfig, ALL_STATUSES } from "@/lib/ui";
 
 type Employee = { _id: string; name: string };
-type LeadPageResponse = { leads: LeadRecord[]; pagination: { page: number; pages: number; total: number; limit: number } };
-type Stats = { total: number; new_today: number; contacted: number; interested: number; follow_ups_today: number };
+type LeadPageResponse = {
+  leads: LeadRecord[];
+  pagination: { page: number; pages: number; total: number; limit: number };
+};
+type Stats = {
+  total: number; new_today: number; contacted: number;
+  interested: number; follow_ups_today: number;
+};
 
 const leadsFetcher = async (path: string) => (await apiFetch<LeadPageResponse>(path)).data;
-const employeesFetcher = async () => (await apiFetch<{ employees: Employee[] }>("/users/employees")).data?.employees ?? [];
+const employeesFetcher = async () =>
+  (await apiFetch<{ employees: Employee[] }>("/users/employees")).data?.employees ?? [];
 const statsFetcher = async () => (await apiFetch<Stats>("/leads/stats")).data ?? null;
 
 function buildCsv(leads: LeadRecord[]) {
-  const header = ["Business Name", "Owner", "Phone", "WhatsApp", "Niche", "Status", "Lead Quality", "City", "Rating", "Score"];
-  const rows = leads.map((lead) => [
-    lead.name,
-    lead.ownerName ?? "",
-    lead.phone,
-    lead.whatsapp ?? "",
-    lead.niche,
-    lead.status,
-    lead.leadQuality,
-    lead.city ?? "",
-    lead.rating ?? "",
-    lead.score ?? "",
+  const header = ["Business Name","Owner","Phone","WhatsApp","Niche","Status","Quality","City","Rating","Score"];
+  const rows = leads.map((l) => [
+    l.name, l.ownerName ?? "", l.phone, l.whatsapp ?? "",
+    l.niche, l.status, l.leadQuality, l.city ?? "", l.rating ?? "", l.score ?? "",
   ]);
-  return [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
+  return [header, ...rows]
+    .map((r) => r.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(","))
+    .join("\n");
 }
 
-function getWhatsAppUrl(lead: LeadRecord) {
-  const number = (lead.whatsapp || lead.phone).replace(/\D/g, "");
-  const message = lead.pitchMessage
+function getWaUrl(lead: LeadRecord) {
+  const n = (lead.whatsapp || lead.phone).replace(/\D/g, "");
+  const m = lead.pitchMessage
     ? encodeURIComponent(lead.pitchMessage)
-    : encodeURIComponent(`Namaste! ${lead.name} wale hain aap? Main aapke business ke baare mein baat karna chahta tha.`);
-  return `https://wa.me/${number}?text=${message}`;
+    : encodeURIComponent(`Namaste! ${lead.name} wale hain aap?`);
+  return `https://wa.me/${n}?text=${m}`;
 }
 
-function AssignDropdown({ lead, employees, onAssigned }: { lead: LeadRecord; employees: Employee[]; onAssigned: () => void }) {
-  const currentAssignee = typeof lead.assignedTo === "object" && lead.assignedTo !== null ? lead.assignedTo._id : (lead.assignedTo as string | null | undefined) ?? "";
-  const [value, setValue] = useState(currentAssignee);
+function AssignDropdown({ lead, employees, onAssigned }: {
+  lead: LeadRecord; employees: Employee[]; onAssigned: () => void;
+}) {
+  const current =
+    typeof lead.assignedTo === "object" && lead.assignedTo !== null
+      ? lead.assignedTo._id
+      : (lead.assignedTo as string | null | undefined) ?? "";
+  const [value, setValue] = useState(current);
   const [saving, setSaving] = useState(false);
 
-  async function assign(newValue: string) {
-    setValue(newValue);
+  async function assign(v: string) {
+    setValue(v);
     setSaving(true);
     try {
       await apiFetch(`/leads/${lead._id}/assign`, {
         method: "PATCH",
-        body: JSON.stringify({ assignedTo: newValue || null }),
+        body: JSON.stringify({ assignedTo: v || null }),
       });
       onAssigned();
     } finally {
@@ -63,57 +72,78 @@ function AssignDropdown({ lead, employees, onAssigned }: { lead: LeadRecord; emp
   }
 
   return (
-    <Select
+    <select
       value={value}
-      onChange={(event) => assign(event.target.value)}
+      onChange={(e) => assign(e.target.value)}
       disabled={saving}
-      className="h-9 text-xs"
+      className="h-8 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-slate-400"
     >
       <option value="">Unassigned</option>
-      {employees.map((emp) => (
-        <option key={emp._id} value={emp._id}>
-          {emp.name}
-        </option>
+      {employees.map((e) => (
+        <option key={e._id} value={e._id}>{e.name}</option>
       ))}
-    </Select>
+    </select>
   );
 }
 
 export default function AdminLeadsPage() {
-  const [view, setView] = useState<"table" | "cards">("cards");
-  const [status, setStatus] = useState("");
-  const [niche, setNiche] = useState("");
-  const [employee, setEmployee] = useState("");
-  const [leadQuality, setLeadQuality] = useState("");
+  // filters
+  const [status, setStatus]               = useState("");
+  const [niche, setNiche]                 = useState("");
+  const [employee, setEmployee]           = useState("");
+  const [leadQuality, setLeadQuality]     = useState("");
   const [websiteStatus, setWebsiteStatus] = useState("");
-  const [city, setCity] = useState("");
-  const [search, setSearch] = useState("");
+  const [city, setCity]                   = useState("");
+  const [search, setSearch]               = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [reassignTo, setReassignTo] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [autoAssigning, setAutoAssigning] = useState(false);
-  const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
+  const [fromDate, setFromDate]           = useState("");
+  const [toDate, setToDate]               = useState("");
+  const [filtersOpen, setFiltersOpen]     = useState(false);
 
-  const { data, isLoading, mutate } = useSWR(
-    `/leads?page=${page}&limit=20&status=${status}&niche=${niche}&assignedTo=${employee}&leadQuality=${leadQuality}&websiteStatus=${websiteStatus}&city=${city}&search=${debouncedSearch}&from=${fromDate}&to=${toDate}`,
-    leadsFetcher
-  );
-  const { data: employees = [] } = useSWR("admin-lead-employees", employeesFetcher);
-  const { data: stats } = useSWR("admin-leads-stats", statsFetcher);
+  // pagination — resets on any filter change
+  const [page, setPage] = useState(1);
+
+  // other state
+  const [selected, setSelected]       = useState<string[]>([]);
+  const [reassignTo, setReassignTo]   = useState("");
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [drawerLeadId, setDrawerLeadId]   = useState<string | null>(null);
+
+  // reset page when any filter changes
+  useEffect(() => { setPage(1); }, [status, niche, employee, leadQuality, websiteStatus, city, debouncedSearch, fromDate, toDate]);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => setDebouncedSearch(search), 300);
-    return () => window.clearTimeout(timeout);
+    const t = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(t);
   }, [search]);
 
-  const leads = data?.leads ?? [];
+  const swrKey = `/leads?page=${page}&limit=20&status=${status}&niche=${niche}&assignedTo=${employee}&leadQuality=${leadQuality}&websiteStatus=${websiteStatus}&city=${city}&search=${debouncedSearch}&from=${fromDate}&to=${toDate}`;
+
+  const { data, isLoading, mutate } = useSWR(swrKey, leadsFetcher);
+  const { data: employees = [] }    = useSWR("admin-lead-employees", employeesFetcher);
+  const { data: stats }             = useSWR("admin-leads-stats", statsFetcher);
+
+  const leads      = data?.leads ?? [];
   const pagination = data?.pagination;
 
+  const activeFilterCount = [status, niche, employee, leadQuality, websiteStatus, city, fromDate, toDate]
+    .filter(Boolean).length;
+
+  function clearAll() {
+    setStatus(""); setNiche(""); setEmployee(""); setLeadQuality("");
+    setWebsiteStatus(""); setCity(""); setSearch(""); setDebouncedSearch("");
+    setFromDate(""); setToDate(""); setPage(1);
+  }
+
   async function reassignSelected() {
-    await Promise.all(selected.map((leadId) => apiFetch(`/leads/${leadId}/assign`, { method: "PATCH", body: JSON.stringify({ assignedTo: reassignTo || null }) })));
+    await Promise.all(
+      selected.map((id) =>
+        apiFetch(`/leads/${id}/assign`, {
+          method: "PATCH",
+          body: JSON.stringify({ assignedTo: reassignTo || null }),
+        })
+      )
+    );
     setSelected([]);
     await mutate();
   }
@@ -130,329 +160,247 @@ export default function AdminLeadsPage() {
 
   function exportCsv() {
     const blob = new Blob([buildCsv(leads)], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "expectocrm-leads.csv";
-    link.click();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = "leads.csv"; a.click();
     URL.revokeObjectURL(url);
   }
 
   return (
-    <div className="space-y-5">
-      <SectionTitle
-        eyebrow="Manage"
-        title="All leads"
-        description="Filter, assign, and export your complete lead pipeline."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => (window.location.href = "/admin/leads/new")}>
-              <Plus className="h-4 w-4" />
-              Add Lead
-            </Button>
-            <Button variant="accent" onClick={handleAutoAssign} disabled={autoAssigning}>
-              <Shuffle className="h-4 w-4" />
-              {autoAssigning ? "Assigning..." : "Auto-Assign"}
-            </Button>
-            <Button variant="secondary" onClick={exportCsv}>
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-            <Button variant={view === "cards" ? "primary" : "secondary"} onClick={() => setView("cards")}>
-              <Grid2X2 className="h-4 w-4" />
-            </Button>
-            <Button variant={view === "table" ? "primary" : "secondary"} onClick={() => setView("table")}>
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-        }
-      />
+    <div className="space-y-4 pb-6">
 
-      {/* STATS BAR */}
+      {/* ── PAGE HEADER ── */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Manage</p>
+          <h1 className="text-xl font-bold text-slate-950">All Leads</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => (window.location.href = "/admin/leads/new")} className="h-10 px-3">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Add</span>
+          </Button>
+          <Button variant="accent" onClick={handleAutoAssign} disabled={autoAssigning} className="h-10 px-3">
+            <Shuffle className="h-4 w-4" />
+            <span className="hidden sm:inline">{autoAssigning ? "..." : "Auto-Assign"}</span>
+          </Button>
+          <Button variant="secondary" onClick={exportCsv} className="h-10 px-3">
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* ── STATS BAR ── */}
       {stats ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-4 gap-2">
           {[
-            { label: "Total", value: stats.total, filter: "", color: "text-slate-700" },
-            { label: "New Today", value: stats.new_today, filter: "new_today", color: "text-blue-700" },
-            { label: "Contacted", value: stats.contacted, filter: "reached_out", color: "text-emerald-700" },
-            { label: "Interested 🔥", value: stats.interested, filter: "interested", color: "text-orange-700" },
-          ].map((item) => (
+            { label: "Total",      value: stats.total,       filter: "",           color: "text-slate-800" },
+            { label: "New Today",  value: stats.new_today,   filter: "new",        color: "text-blue-700"  },
+            { label: "Contacted",  value: stats.contacted,   filter: "reached_out",color: "text-emerald-700"},
+            { label: "🔥 Hot",    value: stats.interested,  filter: "interested", color: "text-orange-700"},
+          ].map((s) => (
             <button
-              key={item.label}
+              key={s.label}
               type="button"
-              onClick={() => item.filter && setStatus(item.filter)}
-              className="flex flex-col items-center rounded-2xl bg-white px-3 py-4 text-center ring-1 ring-slate-200 transition hover:bg-slate-50 active:scale-[0.98]"
+              onClick={() => { if (s.filter) { setStatus(s.filter); setPage(1); } }}
+              className={`flex flex-col items-center rounded-2xl py-3 transition active:scale-[0.97] ${
+                status === s.filter && s.filter
+                  ? "bg-slate-950 shadow-md"
+                  : "bg-white ring-1 ring-slate-200 hover:bg-slate-50"
+              }`}
             >
-              <span className={`text-2xl font-bold ${item.color}`}>{item.value}</span>
-              <span className="mt-1 text-xs font-semibold text-slate-500">{item.label}</span>
+              <span className={`text-xl font-bold leading-none ${status === s.filter && s.filter ? "text-white" : s.color}`}>
+                {s.value}
+              </span>
+              <span className={`mt-1 text-[10px] font-semibold leading-tight ${status === s.filter && s.filter ? "text-white/70" : "text-slate-500"}`}>
+                {s.label}
+              </span>
             </button>
           ))}
         </div>
       ) : null}
 
-      <Card className="space-y-3">
-        <div className="grid gap-3 xl:grid-cols-3">
-          <div className="relative xl:col-span-2">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name or phone" className="pl-11" />
-          </div>
-          <Select value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="">All status</option>
-            {ALL_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </Select>
+      {/* ── SEARCH + FILTER TOGGLE ── */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name or phone…"
+            className="pl-10"
+          />
         </div>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className={`relative flex h-12 items-center gap-2 rounded-2xl px-4 text-sm font-semibold transition ${
+            filtersOpen || activeFilterCount > 0
+              ? "bg-slate-950 text-white"
+              : "bg-white text-slate-700 ring-1 ring-slate-200"
+          }`}
+        >
+          <Filter className="h-4 w-4" />
+          <span className="hidden sm:inline">Filters</span>
+          {activeFilterCount > 0 ? (
+            <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+              {activeFilterCount}
+            </span>
+          ) : null}
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+        </button>
+      </div>
 
-        <div className="grid gap-3 xl:grid-cols-5">
-          <Input placeholder="Niche" value={niche} onChange={(event) => setNiche(event.target.value)} />
-          <Input placeholder="City" value={city} onChange={(event) => setCity(event.target.value)} />
-          <Select value={leadQuality} onChange={(event) => setLeadQuality(event.target.value)}>
-            <option value="">All quality</option>
-            <option value="hot">Hot</option>
-            <option value="warm">Warm</option>
-            <option value="cold">Cold</option>
-          </Select>
-          <Select value={websiteStatus} onChange={(event) => setWebsiteStatus(event.target.value)}>
-            <option value="">Website status</option>
-            <option value="no_website">No Website</option>
-            <option value="has_website">Has Website</option>
-            <option value="website_is_bad">Website Is Bad</option>
-          </Select>
-          <Select value={employee} onChange={(event) => setEmployee(event.target.value)}>
-            <option value="">All employees</option>
-            {employees.map((item) => (
-              <option key={item._id} value={item._id}>
-                {item.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="grid gap-3 xl:grid-cols-3">
-          <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
-          <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
-          <Button variant="secondary" onClick={() => {
-            setStatus(""); setNiche(""); setEmployee(""); setLeadQuality("");
-            setWebsiteStatus(""); setCity(""); setSearch(""); setDebouncedSearch("");
-            setFromDate(""); setToDate(""); setPage(1);
-          }}>
-            <SlidersHorizontal className="h-4 w-4" />
-            Clear filters
-          </Button>
-        </div>
-      </Card>
-
-      {selected.length ? (
-        <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-semibold text-slate-950">{selected.length} leads selected</p>
-          <div className="flex gap-2">
-            <Select value={reassignTo} onChange={(event) => setReassignTo(event.target.value)} className="max-w-52">
-              <option value="">Reassign to...</option>
-              {employees.map((item) => (
-                <option key={item._id} value={item._id}>
-                  {item.name}
-                </option>
+      {/* ── FILTER PANEL (collapsible) ── */}
+      {filtersOpen ? (
+        <div className="space-y-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 shadow-sm">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All status</option>
+              {ALL_STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </Select>
-            <Button onClick={reassignSelected}>Reassign</Button>
+            <Select value={leadQuality} onChange={(e) => setLeadQuality(e.target.value)}>
+              <option value="">All quality</option>
+              <option value="hot">🔥 Hot</option>
+              <option value="warm">☀️ Warm</option>
+              <option value="cold">❄️ Cold</option>
+            </Select>
+            <Select value={employee} onChange={(e) => setEmployee(e.target.value)}>
+              <option value="">All employees</option>
+              {employees.map((emp) => (
+                <option key={emp._id} value={emp._id}>{emp.name}</option>
+              ))}
+            </Select>
+            <Input placeholder="Niche" value={niche} onChange={(e) => setNiche(e.target.value)} />
+            <Input placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
+            <Select value={websiteStatus} onChange={(e) => setWebsiteStatus(e.target.value)}>
+              <option value="">Website</option>
+              <option value="no_website">No Website</option>
+              <option value="has_website">Has Website</option>
+              <option value="website_is_bad">Bad Website</option>
+            </Select>
           </div>
-        </Card>
+          <div className="grid grid-cols-2 gap-2">
+            <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          </div>
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={clearAll}
+              className="flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:text-red-600"
+            >
+              <X className="h-4 w-4" />
+              Clear all filters
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(false)}
+              className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
       ) : null}
 
+      {/* ── BULK REASSIGN BAR ── */}
+      {selected.length > 0 ? (
+        <div className="flex items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-white">
+          <span className="text-sm font-semibold">{selected.length} selected</span>
+          <select
+            value={reassignTo}
+            onChange={(e) => setReassignTo(e.target.value)}
+            className="flex-1 rounded-xl bg-white/10 px-3 py-2 text-sm text-white outline-none"
+          >
+            <option value="">Reassign to…</option>
+            {employees.map((e) => (
+              <option key={e._id} value={e._id}>{e.name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={reassignSelected}
+            className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-950"
+          >
+            Go
+          </button>
+          <button type="button" onClick={() => setSelected([])} className="text-white/60 hover:text-white">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
+
+      {/* ── LEAD LIST ── */}
       {isLoading ? (
         <div className="space-y-3">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
+          <SkeletonCard /><SkeletonCard /><SkeletonCard />
         </div>
-      ) : leads.length ? (
-        view === "cards" ? (
-          <div className="space-y-3">
-            {leads.map((lead) => (
-              <Card key={lead._id} className="overflow-hidden p-0">
-                <div className="space-y-3 p-4">
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-base font-semibold text-slate-950">{lead.name}</h3>
-                      <p className="mt-0.5 text-sm text-slate-600">
-                        {lead.ownerName ?? "No owner"} · {lead.city ?? "No city"}
-                      </p>
-                      {lead.rating != null ? (
-                        <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-amber-600">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                          {lead.rating}
-                          {lead.reviewCount != null ? ` (${lead.reviewCount})` : ""}
-                          {lead.score != null ? <span className="ml-1 text-slate-400">· Score: {lead.score}</span> : null}
-                        </p>
-                      ) : null}
-                    </div>
-                    <NicheBadge niche={lead.niche} />
-                  </div>
-
-                  {/* Badges */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <LeadQualityBadge quality={lead.leadQuality} />
-                    {(() => {
-                      const cfg = statusConfig[lead.status];
-                      return cfg ? (
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>
-                          {cfg.emoji} {cfg.label}
-                        </span>
-                      ) : null;
-                    })()}
-                    <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-slate-500">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(lead._id)}
-                        onChange={(event) => setSelected((current) =>
-                          event.target.checked ? [...current, lead._id] : current.filter((id) => id !== lead._id)
-                        )}
-                        className="h-4 w-4 rounded"
-                      />
-                      Select
-                    </label>
-                  </div>
-
-                  {/* Pitch message */}
-                  {lead.pitchMessage ? (
-                    <div className="rounded-2xl bg-blue-50 p-3 ring-1 ring-blue-200">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700">Pitch message</p>
-                      <p className="mt-1 line-clamp-2 text-sm text-blue-950">{lead.pitchMessage}</p>
-                    </div>
-                  ) : lead.strongHook ? (
-                    <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Why call?</p>
-                      <p className="mt-1 text-sm text-amber-950">{lead.strongHook}</p>
-                    </div>
-                  ) : null}
-
-                  {/* Action buttons */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <a
-                      href={`tel:${lead.phone}`}
-                      className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-3 text-sm font-semibold text-white transition active:scale-[0.98]"
-                    >
-                      <PhoneCall className="h-4 w-4" />
-                      Call
-                    </a>
-                    <a
-                      href={getWhatsAppUrl(lead)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-3 text-sm font-semibold text-white transition active:scale-[0.98]"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      WhatsApp
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => setDrawerLeadId(lead._id)}
-                      className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-slate-100 px-3 text-sm font-semibold text-slate-700 transition active:scale-[0.98]"
-                    >
-                      View
-                    </button>
-                  </div>
-                </div>
-
-                {/* Assign row */}
-                <div className="flex items-center gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-semibold text-slate-500">Assign to:</p>
-                  <div className="flex-1">
-                    <AssignDropdown lead={lead} employees={employees} onAssigned={() => mutate()} />
-                  </div>
-                  {lead.phone ? (
-                    <p className="shrink-0 text-xs text-slate-400">{lead.phone}</p>
-                  ) : null}
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card className="overflow-x-auto p-0">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Select</th>
-                  <th className="px-4 py-3">Business</th>
-                  <th className="px-4 py-3">Niche</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Quality</th>
-                  <th className="px-4 py-3">Assign</th>
-                  <th className="px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => (
-                  <tr key={lead._id} className="border-t border-slate-200">
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(lead._id)}
-                        onChange={(event) => setSelected((current) =>
-                          event.target.checked ? [...current, lead._id] : current.filter((id) => id !== lead._id)
-                        )}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-slate-950">{lead.name}</p>
-                      <p className="text-xs text-slate-500">{lead.city ?? ""}</p>
-                      {lead.rating != null ? (
-                        <p className="flex items-center gap-1 text-xs text-amber-600">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                          {lead.rating}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3"><NicheBadge niche={lead.niche} /></td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{lead.phone}</td>
-                    <td className="px-4 py-3">{(() => {
-                      const cfg = statusConfig[lead.status];
-                      return cfg ? <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>{cfg.emoji} {cfg.label}</span> : <span>{lead.status}</span>;
-                    })()}</td>
-                    <td className="px-4 py-3"><LeadQualityBadge quality={lead.leadQuality} /></td>
-                    <td className="px-4 py-3 min-w-[160px]">
-                      <AssignDropdown lead={lead} employees={employees} onAssigned={() => mutate()} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <a href={`tel:${lead.phone}`}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-white">
-                          <PhoneCall className="h-3.5 w-3.5" />Call
-                        </a>
-                        <a href={getWhatsAppUrl(lead)} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366] px-3 py-2 text-xs font-semibold text-white">
-                          <MessageCircle className="h-3.5 w-3.5" />WA
-                        </a>
-                        <button type="button" onClick={() => setDrawerLeadId(lead._id)}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                          View
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-        )
+      ) : leads.length > 0 ? (
+        <div className="space-y-3">
+          {leads.map((lead) => (
+            <LeadCardAdmin
+              key={lead._id}
+              lead={lead}
+              employees={employees}
+              selected={selected.includes(lead._id)}
+              onSelect={(v) =>
+                setSelected((c) =>
+                  v ? [...c, lead._id] : c.filter((id) => id !== lead._id)
+                )
+              }
+              onView={() => setDrawerLeadId(lead._id)}
+              onAssigned={() => mutate()}
+            />
+          ))}
+        </div>
       ) : (
-        <EmptyState title="No leads found" description="Try broadening the filters or clearing the search." />
+        <EmptyState
+          title="No leads found"
+          description="Try clearing some filters or broadening your search."
+          action={
+            activeFilterCount > 0 ? (
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-sm font-semibold text-slate-700 underline underline-offset-4"
+              >
+                Clear all filters
+              </button>
+            ) : undefined
+          }
+        />
       )}
 
-      {pagination ? (
-        <div className="flex items-center justify-between">
-          <Button variant="secondary" disabled={pagination.page <= 1} onClick={() => setPage((value) => Math.max(value - 1, 1))}>
-            Previous
-          </Button>
-          <p className="text-sm text-slate-600">
-            Page {pagination.page} of {pagination.pages} · {pagination.total} leads
-          </p>
-          <Button variant="secondary" disabled={pagination.page >= pagination.pages} onClick={() => setPage((value) => value + 1)}>
+      {/* ── PAGINATION ── */}
+      {pagination && pagination.pages > 1 ? (
+        <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
+          <button
+            type="button"
+            disabled={pagination.page <= 1}
+            onClick={() => setPage((p) => Math.max(p - 1, 1))}
+            className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-40 active:scale-[0.97]"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Prev
+          </button>
+          <div className="text-center">
+            <p className="text-sm font-bold text-slate-950">
+              {pagination.page} / {pagination.pages}
+            </p>
+            <p className="text-xs text-slate-400">{pagination.total} leads</p>
+          </div>
+          <button
+            type="button"
+            disabled={pagination.page >= pagination.pages}
+            onClick={() => setPage((p) => p + 1)}
+            className="flex items-center gap-1.5 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40 active:scale-[0.97]"
+          >
             Next
-          </Button>
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
       ) : null}
 
@@ -461,6 +409,117 @@ export default function AdminLeadsPage() {
         onClose={() => setDrawerLeadId(null)}
         onUpdated={() => mutate()}
       />
+    </div>
+  );
+}
+
+/* ── ADMIN LEAD CARD ── */
+function LeadCardAdmin({
+  lead, employees, selected, onSelect, onView, onAssigned,
+}: {
+  lead: LeadRecord;
+  employees: Employee[];
+  selected: boolean;
+  onSelect: (v: boolean) => void;
+  onView: () => void;
+  onAssigned: () => void;
+}) {
+  const cfg = statusConfig[lead.status];
+  const lastContact = (lead as LeadRecord & { last_contacted_by?: string; last_action?: string }).last_contacted_by;
+  const lastAction  = (lead as LeadRecord & { last_contacted_by?: string; last_action?: string }).last_action;
+
+  return (
+    <div className={`overflow-hidden rounded-2xl bg-white ring-1 transition-all ${selected ? "ring-slate-950 shadow-md" : "ring-slate-200 shadow-sm"}`}>
+      <div className="p-4 space-y-3">
+
+        {/* ROW 1 — name + niche + checkbox */}
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <button type="button" onClick={onView} className="text-left">
+              <p className="truncate text-[15px] font-bold text-slate-950 hover:text-slate-700">{lead.name}</p>
+            </button>
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+              {lead.rating != null ? (
+                <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600">
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  {lead.rating}
+                  {lead.reviewCount != null ? ` (${lead.reviewCount})` : ""}
+                </span>
+              ) : null}
+              {lead.city ? <><span>·</span><span className="truncate">{lead.city}</span></> : null}
+            </p>
+          </div>
+          <NicheBadge niche={lead.niche} />
+          <label className="flex cursor-pointer items-center">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={(e) => onSelect(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-slate-950"
+            />
+          </label>
+        </div>
+
+        {/* ROW 2 — badges + contact status */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <LeadQualityBadge quality={lead.leadQuality} />
+          {cfg ? (
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>
+              {cfg.emoji} {cfg.label}
+            </span>
+          ) : null}
+          {lastContact ? (
+            <span className="text-[11px] text-slate-400">
+              {lastAction === "whatsapped" ? "💬" : "📞"} {lastContact}
+            </span>
+          ) : (
+            <span className="text-[11px] text-slate-400">Never contacted</span>
+          )}
+        </div>
+
+        {/* ROW 3 — pitch preview */}
+        {lead.pitchMessage ? (
+          <p className="line-clamp-1 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-800 ring-1 ring-blue-100">
+            {lead.pitchMessage}
+          </p>
+        ) : null}
+
+        {/* ROW 4 — action buttons */}
+        <div className="grid grid-cols-3 gap-2">
+          <a
+            href={`tel:${lead.phone}`}
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-sm font-semibold text-white active:scale-[0.97]"
+          >
+            <PhoneCall className="h-4 w-4" />
+            Call
+          </a>
+          <a
+            href={getWaUrl(lead)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-[#25D366] text-sm font-semibold text-white active:scale-[0.97]"
+          >
+            <MessageCircle className="h-4 w-4" />
+            WA
+          </a>
+          <button
+            type="button"
+            onClick={onView}
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold text-slate-700 active:scale-[0.97]"
+          >
+            View
+          </button>
+        </div>
+      </div>
+
+      {/* ASSIGN FOOTER */}
+      <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-4 py-2.5">
+        <span className="shrink-0 text-[11px] font-semibold text-slate-400">Assign:</span>
+        <div className="flex-1">
+          <AssignDropdown lead={lead} employees={employees} onAssigned={onAssigned} />
+        </div>
+        <span className="shrink-0 text-[11px] text-slate-400">{lead.phone}</span>
+      </div>
     </div>
   );
 }
