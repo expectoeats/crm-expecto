@@ -638,6 +638,35 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     }
   }
 
+  if (first === "niches") {
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    // Aggregate unique niches from both `niche` and `category` fields
+    const [nicheGroups, categoryGroups] = await Promise.all([
+      Lead.aggregate([
+        { $match: { niche: { $exists: true, $nin: [null, ""] } } },
+        { $group: { _id: "$niche" } },
+        { $sort: { _id: 1 } },
+      ]),
+      Lead.aggregate([
+        { $match: { category: { $exists: true, $nin: [null, ""] } } },
+        { $group: { _id: "$category" } },
+        { $sort: { _id: 1 } },
+      ]),
+    ]);
+
+    const allNiches = Array.from(
+      new Set([
+        ...nicheGroups.map((g: { _id: string }) => g._id as string),
+        ...categoryGroups.map((g: { _id: string }) => g._id as string),
+      ])
+    ).filter(Boolean).sort();
+
+    return ok({ niches: allNiches });
+  }
+
   if (first === "recent-updates") {
     if (request.method !== "GET") return methodNotAllowed(["GET"]);
     const payload = await requireAuth(request);

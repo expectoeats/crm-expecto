@@ -23,10 +23,12 @@ type Stats = {
   interested: number; follow_ups_today: number;
 };
 
-const leadsFetcher = async (path: string) => (await apiFetch<LeadPageResponse>(path)).data;
+const leadsFetcher  = async (path: string) => (await apiFetch<LeadPageResponse>(path)).data;
 const employeesFetcher = async () =>
   (await apiFetch<{ employees: Employee[] }>("/users/employees")).data?.employees ?? [];
-const statsFetcher = async () => (await apiFetch<Stats>("/leads/stats")).data ?? null;
+const statsFetcher  = async () => (await apiFetch<Stats>("/leads/stats")).data ?? null;
+const nichesFetcher = async () =>
+  (await apiFetch<{ niches: string[] }>("/leads/niches")).data?.niches ?? [];
 
 function buildCsv(leads: LeadRecord[]) {
   const header = ["Business Name","Owner","Phone","WhatsApp","Niche","Status","Quality","City","Rating","Score"];
@@ -130,6 +132,7 @@ export default function AdminLeadsPage() {
   const { data, isLoading, mutate } = useSWR(swrKey, leadsFetcher);
   const { data: employees = [] }    = useSWR("admin-lead-employees", employeesFetcher);
   const { data: stats }             = useSWR("admin-leads-stats", statsFetcher);
+  const { data: niches = [] }       = useSWR("admin-lead-niches", nichesFetcher);
 
   const leads      = data?.leads ?? [];
   const pagination = data?.pagination;
@@ -284,7 +287,12 @@ export default function AdminLeadsPage() {
                 <option key={emp._id} value={emp._id}>{emp.name}</option>
               ))}
             </Select>
-            <Input placeholder="Niche" value={niche} onChange={(e) => setNiche(e.target.value)} />
+            <Select value={niche} onChange={(e) => setNiche(e.target.value)}>
+              <option value="">All niches / categories</option>
+              {niches.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </Select>
             <Input placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
             <Select value={websiteStatus} onChange={(e) => setWebsiteStatus(e.target.value)}>
               <option value="">Website</option>
