@@ -666,12 +666,21 @@ async function handleLeads(request: NextRequest, segments: string[]) {
 
     const { start, end } = getIstDayRange();
 
+    // ALL statuses that are NOT "new" or "follow_up" = contacted
+    const contactedStatuses = [
+      "reached_out", "in_talks", "interested", "converted",
+      "not_interested", "called", "callback", "proposal_sent",
+      "closed_won", "closed_lost",
+    ] as const;
+    // Hot/active statuses
+    const interestedStatuses = ["interested", "in_talks", "converted"] as const;
+
     if (authPayload.role === "admin") {
       const [total, newToday, contacted, interested, followUpsToday] = await Promise.all([
         Lead.countDocuments(),
         Lead.countDocuments({ createdAt: { $gte: start, $lte: end } }),
-        Lead.countDocuments({ status: { $in: ["reached_out", "in_talks", "interested", "converted", "called", "callback", "proposal_sent"] } }),
-        Lead.countDocuments({ status: { $in: ["interested", "in_talks"] } }),
+        Lead.countDocuments({ status: { $in: contactedStatuses } }),
+        Lead.countDocuments({ status: { $in: interestedStatuses } }),
         Lead.countDocuments({ followUpDate: { $gte: start, $lte: end } }),
       ]);
       return ok({ total, new_today: newToday, contacted, interested, follow_ups_today: followUpsToday });
@@ -679,8 +688,8 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       const [total, newToday, contacted, interested, followUpsToday] = await Promise.all([
         Lead.countDocuments({ assignedTo: authPayload.id }),
         Lead.countDocuments({ assignedTo: authPayload.id, createdAt: { $gte: start, $lte: end } }),
-        Lead.countDocuments({ assignedTo: authPayload.id, status: { $in: ["reached_out", "in_talks", "interested", "converted", "called", "callback", "proposal_sent"] } }),
-        Lead.countDocuments({ assignedTo: authPayload.id, status: { $in: ["interested", "in_talks"] } }),
+        Lead.countDocuments({ assignedTo: authPayload.id, status: { $in: contactedStatuses } }),
+        Lead.countDocuments({ assignedTo: authPayload.id, status: { $in: interestedStatuses } }),
         Lead.countDocuments({ assignedTo: authPayload.id, followUpDate: { $gte: start, $lte: end } }),
       ]);
       return ok({ total, new_today: newToday, contacted, interested, follow_ups_today: followUpsToday });

@@ -202,15 +202,18 @@ export default function AdminLeadsPage() {
       {stats ? (
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: "Total",     value: stats.total,      filter: "",            color: "text-slate-800" },
-            { label: "New Today", value: stats.new_today,  filter: "new",         color: "text-blue-700"  },
-            { label: "Contacted", value: stats.contacted,  filter: "reached_out", color: "text-emerald-700"},
-            { label: "Interested",value: stats.interested, filter: "interested",  color: "text-orange-700"},
+            { label: "Total",     value: stats.total,      filter: "",           color: "text-slate-800" },
+            { label: "New Today", value: stats.new_today,  filter: "new",        color: "text-blue-700"  },
+            { label: "Contacted", value: stats.contacted,  filter: "",           color: "text-emerald-700"},
+            { label: "Interested",value: stats.interested, filter: "interested", color: "text-orange-700"},
           ].map((s) => (
             <button
               key={s.label}
               type="button"
-              onClick={() => { if (s.filter) { setStatus(s.filter); setPage(1); } }}
+              onClick={() => {
+                setStatus(status === s.filter && s.filter ? "" : s.filter);
+                setPage(1);
+              }}
               className={`flex flex-col items-center rounded-2xl py-3 transition active:scale-[0.97] ${
                 status === s.filter && s.filter
                   ? "bg-slate-950 shadow-md"
