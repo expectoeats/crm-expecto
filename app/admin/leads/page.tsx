@@ -22,13 +22,14 @@ type Stats = {
   total: number; new_today: number; contacted: number;
   interested: number; follow_ups_today: number;
 };
+type NichesResponse = { categories: string[]; rawToBroad: Record<string, string> };
 
-const leadsFetcher  = async (path: string) => (await apiFetch<LeadPageResponse>(path)).data;
+const leadsFetcher   = async (path: string) => (await apiFetch<LeadPageResponse>(path)).data;
 const employeesFetcher = async () =>
   (await apiFetch<{ employees: Employee[] }>("/users/employees")).data?.employees ?? [];
-const statsFetcher  = async () => (await apiFetch<Stats>("/leads/stats")).data ?? null;
-const nichesFetcher = async () =>
-  (await apiFetch<{ niches: string[] }>("/leads/niches")).data?.niches ?? [];
+const statsFetcher   = async () => (await apiFetch<Stats>("/leads/stats")).data ?? null;
+const nichesFetcher  = async () =>
+  (await apiFetch<NichesResponse>("/leads/niches")).data ?? { categories: [], rawToBroad: {} };
 
 function buildCsv(leads: LeadRecord[]) {
   const header = ["Business Name","Owner","Phone","WhatsApp","Niche","Status","Quality","City","Rating","Score"];
@@ -100,6 +101,7 @@ export default function AdminLeadsPage() {
   // filters
   const [status, setStatus]               = useState("");
   const [niche, setNiche]                 = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [employee, setEmployee]           = useState("");
   const [leadQuality, setLeadQuality]     = useState("");
   const [websiteStatus, setWebsiteStatus] = useState("");
@@ -119,7 +121,6 @@ export default function AdminLeadsPage() {
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [drawerLeadId, setDrawerLeadId]   = useState<string | null>(null);
 
-  // reset page when any filter changes
   useEffect(() => { setPage(1); }, [status, niche, employee, leadQuality, websiteStatus, city, debouncedSearch, fromDate, toDate]);
 
   useEffect(() => {
@@ -127,21 +128,23 @@ export default function AdminLeadsPage() {
     return () => window.clearTimeout(t);
   }, [search]);
 
-  const swrKey = `/leads?page=${page}&limit=20&status=${status}&niche=${niche}&assignedTo=${employee}&leadQuality=${leadQuality}&websiteStatus=${websiteStatus}&city=${city}&search=${debouncedSearch}&from=${fromDate}&to=${toDate}`;
+  const swrKey = `/leads?page=${page}&limit=20&status=${status}&niche=${encodeURIComponent(niche)}&assignedTo=${employee}&leadQuality=${leadQuality}&websiteStatus=${websiteStatus}&city=${city}&search=${debouncedSearch}&from=${fromDate}&to=${toDate}`;
 
   const { data, isLoading, mutate } = useSWR(swrKey, leadsFetcher);
   const { data: employees = [] }    = useSWR("admin-lead-employees", employeesFetcher);
   const { data: stats }             = useSWR("admin-leads-stats", statsFetcher);
-  const { data: niches = [] }       = useSWR("admin-lead-niches", nichesFetcher);
+  const { data: nichesData }        = useSWR("admin-lead-niches", nichesFetcher);
+  const categories  = nichesData?.categories ?? [];
+  const rawToBroad  = nichesData?.rawToBroad ?? {};
 
   const leads      = data?.leads ?? [];
   const pagination = data?.pagination;
 
-  const activeFilterCount = [status, niche, employee, leadQuality, websiteStatus, city, fromDate, toDate]
+  const activeFilterCount = [status, selectedCategory, employee, leadQuality, websiteStatus, city, fromDate, toDate]
     .filter(Boolean).length;
 
   function clearAll() {
-    setStatus(""); setNiche(""); setEmployee(""); setLeadQuality("");
+    setStatus(""); setNiche(""); setSelectedCategory(""); setEmployee(""); setLeadQuality("");
     setWebsiteStatus(""); setCity(""); setSearch(""); setDebouncedSearch("");
     setFromDate(""); setToDate(""); setPage(1);
   }
@@ -287,10 +290,22 @@ export default function AdminLeadsPage() {
                 <option key={emp._id} value={emp._id}>{emp.name}</option>
               ))}
             </Select>
-            <Select value={niche} onChange={(e) => setNiche(e.target.value)}>
-              <option value="">All niches / categories</option>
-              {niches.map((n) => (
-                <option key={n} value={n}>{n}</option>
+            <Select
+              value={selectedCategory}
+              onChange={(e) => {
+                const broad = e.target.value;
+                setSelectedCategory(broad);
+                if (!broad) { setNiche(""); return; }
+                // Find all raw values mapping to this broad category
+                const rawValues = Object.entries(rawToBroad)
+                  .filter(([, b]) => b === broad)
+                  .map(([raw]) => raw);
+                setNiche(rawValues.length > 0 ? rawValues.join(",") : broad);
+              }}
+            >
+              <option value="">All categories</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
               ))}
             </Select>
             <Input placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />

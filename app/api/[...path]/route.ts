@@ -188,7 +188,15 @@ function buildLeadFilter(searchParams: URLSearchParams) {
   const to = searchParams.get("to");
 
   if (status) filter.status = status;
-  if (niche) filter.$or = [...(filter.$or as unknown[] ?? []), { niche }, { category: niche }];
+  if (niche) {
+    // Support comma-separated list of raw niche values (for broad category filtering)
+    const nicheValues = niche.split(",").map((v) => v.trim()).filter(Boolean);
+    if (nicheValues.length === 1) {
+      filter.$or = [...(filter.$or as unknown[] ?? []), { niche: nicheValues[0] }, { category: nicheValues[0] }];
+    } else if (nicheValues.length > 1) {
+      filter.$or = [...(filter.$or as unknown[] ?? []), { niche: { $in: nicheValues } }, { category: { $in: nicheValues } }];
+    }
+  }
   if (assignedTo) filter.assignedTo = assignedTo;
   if (websiteStatus) filter.websiteStatus = websiteStatus;
   if (leadQuality) filter.leadQuality = leadQuality;
@@ -643,28 +651,185 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     const payload = await requireAuth(request);
     if (!payload) return unauthorized();
 
-    // Aggregate unique niches from both `niche` and `category` fields
+    // Broad category map — sub-categories → parent category
+    // Key: lowercase sub-category string, Value: broad parent label
+    const CATEGORY_MAP: Record<string, string> = {
+      // Salon & Beauty
+      "salon": "Salon & Beauty",
+      "hair salon": "Salon & Beauty",
+      "beauty salon": "Salon & Beauty",
+      "beauty parlour": "Salon & Beauty",
+      "beauty parlor": "Salon & Beauty",
+      "barber shop": "Salon & Beauty",
+      "barber": "Salon & Beauty",
+      "nail salon": "Salon & Beauty",
+      "spa": "Salon & Beauty",
+      "day spa": "Salon & Beauty",
+      "beautician": "Salon & Beauty",
+      "makeup artist": "Salon & Beauty",
+      "make-up artist": "Salon & Beauty",
+      "hairdresser": "Salon & Beauty",
+      "hair replacement service": "Salon & Beauty",
+      "unisex salon": "Salon & Beauty",
+      "fencing salon": "Salon & Beauty",
+      "threading": "Salon & Beauty",
+      "eyebrow threading": "Salon & Beauty",
+
+      // Restaurant & Food
+      "restaurant": "Restaurant & Food",
+      "cafe": "Restaurant & Food",
+      "food": "Restaurant & Food",
+      "dhaba": "Restaurant & Food",
+      "fast food": "Restaurant & Food",
+      "bakery": "Restaurant & Food",
+      "sweet shop": "Restaurant & Food",
+      "catering": "Restaurant & Food",
+      "pizza": "Restaurant & Food",
+      "chinese restaurant": "Restaurant & Food",
+      "north indian restaurant": "Restaurant & Food",
+      "south indian restaurant": "Restaurant & Food",
+
+      // Health & Medical
+      "clinic": "Health & Medical",
+      "hospital": "Health & Medical",
+      "doctor": "Health & Medical",
+      "dentist": "Health & Medical",
+      "dental clinic": "Health & Medical",
+      "physiotherapist": "Health & Medical",
+      "pharmacy": "Health & Medical",
+      "ayurveda": "Health & Medical",
+      "homeopathy": "Health & Medical",
+      "eye care": "Health & Medical",
+      "eye hospital": "Health & Medical",
+      "skin care": "Health & Medical",
+      "dermatologist": "Health & Medical",
+
+      // Fitness & Gym
+      "gym": "Fitness & Gym",
+      "fitness": "Fitness & Gym",
+      "yoga": "Fitness & Gym",
+      "yoga studio": "Fitness & Gym",
+      "pilates": "Fitness & Gym",
+      "crossfit gym": "Fitness & Gym",
+      "personal trainer": "Fitness & Gym",
+      "sports": "Fitness & Gym",
+      "swimming pool": "Fitness & Gym",
+
+      // Education & Coaching
+      "school": "Education & Coaching",
+      "coaching": "Education & Coaching",
+      "tutor": "Education & Coaching",
+      "tutoring": "Education & Coaching",
+      "coaching center": "Education & Coaching",
+      "coaching centre": "Education & Coaching",
+      "college": "Education & Coaching",
+      "university": "Education & Coaching",
+      "institute": "Education & Coaching",
+      "training": "Education & Coaching",
+      "dance school": "Education & Coaching",
+      "music school": "Education & Coaching",
+      "art school": "Education & Coaching",
+
+      // Real Estate
+      "real estate": "Real Estate",
+      "property": "Real Estate",
+      "builder": "Real Estate",
+      "construction": "Real Estate",
+      "interior design": "Real Estate",
+      "interior designer": "Real Estate",
+      "architect": "Real Estate",
+      "home decor": "Real Estate",
+      "furniture": "Real Estate",
+
+      // Hotel & Travel
+      "hotel": "Hotel & Travel",
+      "travel": "Hotel & Travel",
+      "travel agency": "Hotel & Travel",
+      "resort": "Hotel & Travel",
+      "lodge": "Hotel & Travel",
+      "guest house": "Hotel & Travel",
+      "hostel": "Hotel & Travel",
+      "tours": "Hotel & Travel",
+      "tour operator": "Hotel & Travel",
+
+      // E-commerce & Retail
+      "shop": "Retail & E-commerce",
+      "store": "Retail & E-commerce",
+      "clothing": "Retail & E-commerce",
+      "boutique": "Retail & E-commerce",
+      "fashion": "Retail & E-commerce",
+      "electronics": "Retail & E-commerce",
+      "mobile shop": "Retail & E-commerce",
+      "jewellery": "Retail & E-commerce",
+      "jewelry": "Retail & E-commerce",
+      "footwear": "Retail & E-commerce",
+      "hardware store": "Retail & E-commerce",
+      "grocery": "Retail & E-commerce",
+
+      // Legal & Finance
+      "lawyer": "Legal & Finance",
+      "advocate": "Legal & Finance",
+      "ca": "Legal & Finance",
+      "chartered accountant": "Legal & Finance",
+      "finance": "Legal & Finance",
+      "insurance": "Legal & Finance",
+      "investment": "Legal & Finance",
+      "tax consultant": "Legal & Finance",
+      "accounting": "Legal & Finance",
+
+      // Automotive
+      "car": "Automotive",
+      "auto": "Automotive",
+      "car repair": "Automotive",
+      "car wash": "Automotive",
+      "garage": "Automotive",
+      "bike shop": "Automotive",
+      "tyre shop": "Automotive",
+      "automobile": "Automotive",
+      "driving school": "Automotive",
+    };
+
+    // Fetch all raw niche/category values from DB
     const [nicheGroups, categoryGroups] = await Promise.all([
       Lead.aggregate([
         { $match: { niche: { $exists: true, $nin: [null, ""] } } },
         { $group: { _id: "$niche" } },
-        { $sort: { _id: 1 } },
       ]),
       Lead.aggregate([
         { $match: { category: { $exists: true, $nin: [null, ""] } } },
         { $group: { _id: "$category" } },
-        { $sort: { _id: 1 } },
       ]),
     ]);
 
-    const allNiches = Array.from(
+    const rawValues: string[] = Array.from(
       new Set([
-        ...nicheGroups.map((g: { _id: string }) => g._id as string),
-        ...categoryGroups.map((g: { _id: string }) => g._id as string),
+        ...nicheGroups.map((g: { _id: string }) => String(g._id)),
+        ...categoryGroups.map((g: { _id: string }) => String(g._id)),
       ])
-    ).filter(Boolean).sort();
+    ).filter(Boolean);
 
-    return ok({ niches: allNiches });
+    // Map each raw value to its broad category
+    const broadSet = new Set<string>();
+    for (const raw of rawValues) {
+      const lower = raw.toLowerCase().trim();
+      const mapped = CATEGORY_MAP[lower];
+      if (mapped) {
+        broadSet.add(mapped);
+      } else {
+        // Capitalize first letter of unmapped values
+        broadSet.add(raw.charAt(0).toUpperCase() + raw.slice(1));
+      }
+    }
+
+    const categories = Array.from(broadSet).sort();
+    // Also return raw→broad map so frontend can do exact DB queries
+    const rawToBroad: Record<string, string> = {};
+    for (const raw of rawValues) {
+      const lower = raw.toLowerCase().trim();
+      rawToBroad[raw] = CATEGORY_MAP[lower] ?? (raw.charAt(0).toUpperCase() + raw.slice(1));
+    }
+
+    return ok({ categories, rawToBroad });
   }
 
   if (first === "recent-updates") {
