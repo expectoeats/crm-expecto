@@ -17,6 +17,7 @@ const leadSchema = new Schema(
     name: { type: String, required: [true, "Lead name is required"], trim: true },
     ownerName: { type: String, trim: true },
     phone: { type: String, required: [true, "Phone is required"], trim: true },
+    whatsapp: { type: String, trim: true }, // WhatsApp number (may differ from phone)
     email: { type: String, trim: true, lowercase: true },
     city: { type: String, trim: true },
     niche: { type: String, required: [true, "Niche is required"], trim: true },
@@ -32,6 +33,13 @@ const leadSchema = new Schema(
     suggestedService: { type: String, trim: true },
     callScript: { type: String, trim: true },
     source: { type: String, default: "google_research", trim: true },
+    // Google Maps scraped data fields
+    rating: { type: Number, default: null },
+    reviewCount: { type: Number, default: null },
+    score: { type: Number, default: null },
+    pitchMessage: { type: String, trim: true },
+    isGeneric: { type: Boolean, default: false },
+    hasWebsite: { type: Boolean, default: false },
     leadQuality: { type: String, enum: ["hot", "warm", "cold"], default: "warm" },
     assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null },
     status: {

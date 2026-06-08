@@ -415,7 +415,20 @@ async function handleLeads(request: NextRequest, segments: string[]) {
         return unauthorized();
       }
 
-      const body = (await parseJson<Record<string, unknown>>(request)) ?? {};
+      const raw = (await parseJson<Record<string, unknown>>(request)) ?? {};
+
+      // Normalize Google Maps scraper format → Lead schema format
+      const body: Record<string, unknown> = { ...raw };
+      if (!body.name && body.business_name) { body.name = body.business_name; delete body.business_name; }
+      if (!body.niche && body.category) { body.niche = body.category; delete body.category; }
+      if (body.has_website !== undefined && !body.websiteStatus) {
+        body.websiteStatus = body.has_website ? "has_website" : "no_website";
+      }
+      if (!body.websiteUrl && body.website_url) { body.websiteUrl = body.website_url; delete body.website_url; }
+      if (!body.reviewCount && body.review_count !== undefined) { body.reviewCount = body.review_count; delete body.review_count; }
+      if (!body.pitchMessage && body.pitch_message) { body.pitchMessage = body.pitch_message; delete body.pitch_message; }
+      if (body.isGeneric === undefined && body.is_generic !== undefined) { body.isGeneric = body.is_generic; delete body.is_generic; }
+      delete body.created_at;
 
       try {
         const lead = await Lead.create(body);
@@ -456,15 +469,61 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     if (!payload) return unauthorized();
 
     const body = (await parseJson<LeadBody>(request)) ?? {};
-    const leads = Array.isArray(body.leads) ? body.leads : Array.isArray(body) ? body : null;
+    const rawLeads = Array.isArray(body.leads) ? body.leads : Array.isArray(body) ? body : null;
 
-    if (!Array.isArray(leads) || leads.length === 0) {
+    if (!Array.isArray(rawLeads) || rawLeads.length === 0) {
       return fail("Lead array is required", 400);
     }
 
+    // Normalize Google Maps scraper format → Lead schema format
+    const leads = rawLeads.map((raw: Record<string, unknown>) => {
+      const normalized: Record<string, unknown> = { ...raw };
+
+      // Google Maps field: business_name → name
+      if (!normalized.name && normalized.business_name) {
+        normalized.name = normalized.business_name;
+        delete normalized.business_name;
+      }
+      // category → niche
+      if (!normalized.niche && normalized.category) {
+        normalized.niche = normalized.category;
+        delete normalized.category;
+      }
+      // has_website → websiteStatus
+      if (normalized.has_website !== undefined && !normalized.websiteStatus) {
+        normalized.websiteStatus = normalized.has_website ? "has_website" : "no_website";
+      }
+      // website_url → websiteUrl
+      if (!normalized.websiteUrl && normalized.website_url) {
+        normalized.websiteUrl = normalized.website_url;
+        delete normalized.website_url;
+      }
+      // review_count → reviewCount
+      if (!normalized.reviewCount && normalized.review_count !== undefined) {
+        normalized.reviewCount = normalized.review_count;
+        delete normalized.review_count;
+      }
+      // pitch_message → pitchMessage
+      if (!normalized.pitchMessage && normalized.pitch_message) {
+        normalized.pitchMessage = normalized.pitch_message;
+        delete normalized.pitch_message;
+      }
+      // is_generic → isGeneric
+      if (normalized.isGeneric === undefined && normalized.is_generic !== undefined) {
+        normalized.isGeneric = normalized.is_generic;
+        delete normalized.is_generic;
+      }
+      // created_at → use MongoDB default (drop to avoid cast errors)
+      delete normalized.created_at;
+      // _id from scraper — drop it so Mongo generates its own
+      delete normalized._id;
+
+      return normalized;
+    });
+
     try {
       const created = await Lead.insertMany(leads, { ordered: false });
-      return json({ success: true, data: { leads: created } }, 201);
+      return json({ success: true, data: { leads: created, insertedCount: created.length } }, 201);
     } catch (error) {
       return fail(error instanceof Error ? error.message : "Unable to bulk create leads", 400);
     }

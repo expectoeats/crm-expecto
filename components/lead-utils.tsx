@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSWRConfig } from "swr";
-import { PhoneCall } from "lucide-react";
+import { MessageCircle, PhoneCall, Star } from "lucide-react";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, StatusBadge } from "@/components/badges";
@@ -14,6 +14,7 @@ export type LeadRecord = {
   name: string;
   ownerName?: string;
   phone: string;
+  whatsapp?: string;
   email?: string;
   city?: string;
   niche: string;
@@ -25,6 +26,12 @@ export type LeadRecord = {
   suggestedService?: string;
   callScript?: string;
   source?: string;
+  rating?: number;
+  reviewCount?: number;
+  score?: number;
+  pitchMessage?: string;
+  isGeneric?: boolean;
+  hasWebsite?: boolean;
   leadQuality: string;
   status: string;
   assignedTo?: { _id: string; name?: string } | string | null;
@@ -49,6 +56,12 @@ export function LeadCard({
     await mutate((key) => typeof key === "string" && key.startsWith("/leads"));
   }
 
+  const whatsappNumber = (lead.whatsapp || lead.phone).replace(/\D/g, "");
+  const whatsappMessage = lead.pitchMessage
+    ? encodeURIComponent(lead.pitchMessage)
+    : encodeURIComponent(`Namaste! ${lead.name} wale hain aap? Main aapke business ke baare mein baat karna chahta tha.`);
+  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+
   return (
     <>
       <Card className="overflow-hidden p-0">
@@ -57,8 +70,15 @@ export function LeadCard({
             <div>
               <h3 className="text-base font-semibold text-slate-950">{lead.name}</h3>
               <p className="mt-1 text-sm text-slate-600">
-                {lead.ownerName ?? "Owner not added"} - {lead.city ?? "No city"}
+                {lead.ownerName ?? "Owner not added"} · {lead.city ?? "No city"}
               </p>
+              {lead.rating != null ? (
+                <p className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  {lead.rating} {lead.reviewCount != null ? `(${lead.reviewCount} reviews)` : ""}
+                  {lead.score != null ? <span className="ml-1 text-slate-500">· Score: {lead.score}</span> : null}
+                </p>
+              ) : null}
             </div>
             <NicheBadge niche={lead.niche} />
           </div>
@@ -69,27 +89,41 @@ export function LeadCard({
             {lead.followUpDate ? <Badge className="bg-orange-100 text-orange-800 ring-orange-200">Follow-up {formatReadableDate(lead.followUpDate)}</Badge> : null}
           </div>
 
-          {lead.strongHook ? (
+          {lead.pitchMessage ? (
+            <div className="rounded-2xl bg-blue-50 p-3 ring-1 ring-blue-200">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700">Pitch message</p>
+              <p className="mt-1 line-clamp-2 text-sm text-blue-950">{lead.pitchMessage}</p>
+            </div>
+          ) : lead.strongHook ? (
             <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Why call this lead?</p>
               <p className="mt-2 text-sm font-semibold text-amber-950">{lead.strongHook}</p>
             </div>
           ) : null}
 
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <a
               href={`tel:${lead.phone}`}
               onClick={() => setCallOpen(true)}
-              className="inline-flex min-h-[52px] flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
+              className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-3 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
             >
               <PhoneCall className="h-4 w-4" />
               Call
             </a>
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-3 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
+            >
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
+            </a>
             <Link
               href={`/leads/${lead._id}`}
-              className="inline-flex min-h-[52px] flex-1 items-center justify-center rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900"
+              className="inline-flex min-h-[52px] items-center justify-center rounded-2xl bg-slate-100 px-3 py-3 text-sm font-semibold text-slate-900"
             >
-              View Details
+              Details
             </Link>
           </div>
         </div>
@@ -116,6 +150,12 @@ export function LeadCompactRow({
     await mutate((key) => typeof key === "string" && key.startsWith("/leads"));
   }
 
+  const whatsappNumber = (lead.whatsapp || lead.phone).replace(/\D/g, "");
+  const whatsappMessage = lead.pitchMessage
+    ? encodeURIComponent(lead.pitchMessage)
+    : encodeURIComponent(`Namaste! ${lead.name} wale hain aap? Main aapke business ke baare mein baat karna chahta tha.`);
+  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+
   return (
     <>
       <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -133,7 +173,7 @@ export function LeadCompactRow({
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold text-slate-950">{lead.name}</p>
                 <p className="truncate text-sm text-slate-600">
-                  {lead.ownerName ?? "Owner not added"} - {lead.phone}
+                  {lead.ownerName ?? "Owner not added"} · {lead.phone}
                 </p>
               </div>
               <NicheBadge niche={lead.niche} />
@@ -145,7 +185,7 @@ export function LeadCompactRow({
               {lead.assignedTo ? <Badge className="bg-slate-100 text-slate-700 ring-slate-200">Assigned</Badge> : null}
             </div>
 
-            <div className="mt-4 grid gap-2">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <a
                 href={`tel:${lead.phone}`}
                 onClick={() => setCallOpen(true)}
@@ -154,13 +194,22 @@ export function LeadCompactRow({
                 <PhoneCall className="h-4 w-4" />
                 Call
               </a>
-              <Link
-                href={`/leads/${lead._id}`}
-                className="text-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4"
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 text-sm font-semibold text-white"
               >
-                View Details
-              </Link>
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+              </a>
             </div>
+            <Link
+              href={`/leads/${lead._id}`}
+              className="mt-2 block text-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4"
+            >
+              View Details
+            </Link>
           </div>
         </div>
       </div>
