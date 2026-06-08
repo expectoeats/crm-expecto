@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import useSWR, { mutate } from "swr";
-import { AlertTriangle, CalendarDays, ExternalLink, PhoneCall, Save, StickyNote, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, ExternalLink, MessageCircle, PhoneCall, Save, Star, StickyNote, X } from "lucide-react";
 import { EmployeeShell } from "@/components/employee-shell";
 import { Button, Card, EmptyState, Input, Select, Textarea } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, StatusBadge, WebsiteStatusBadge } from "@/components/badges";
@@ -69,9 +69,18 @@ export default function LeadDetailPage() {
   const isWebsiteBad = lead.websiteStatus === "website_is_bad";
   const currentStatus = status ?? lead.status;
 
+  // WhatsApp URL with auto pitch message
+  const waNumber = (lead.whatsapp || lead.phone).replace(/\D/g, "");
+  const waMessage = lead.pitchMessage
+    ? encodeURIComponent(lead.pitchMessage)
+    : encodeURIComponent(`Namaste! ${lead.name} wale hain aap? Main aapke business ke baare mein baat karna chahta tha.`);
+  const whatsappUrl = `https://wa.me/${waNumber}?text=${waMessage}`;
+
   return (
     <EmployeeShell>
-      <div className="space-y-5 pb-32">
+      <div className="space-y-5 pb-40">
+
+        {/* Identity card */}
         <Card className="space-y-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Lead identity</p>
@@ -79,6 +88,14 @@ export default function LeadDetailPage() {
             <p className="mt-1 text-sm text-slate-600">
               {lead.ownerName ?? "Owner not added"} · {lead.city ?? "City not added"}
             </p>
+            {lead.rating != null ? (
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700 ring-1 ring-amber-200">
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                {lead.rating}
+                {lead.reviewCount != null ? <span className="font-normal text-amber-600">({lead.reviewCount} reviews)</span> : null}
+                {lead.score != null ? <span className="ml-1 font-normal text-slate-500">· Score: {lead.score}</span> : null}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -89,27 +106,52 @@ export default function LeadDetailPage() {
           </div>
         </Card>
 
-        <Card className={cn("space-y-4", "border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50")}>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">Why call this lead?</p>
-          {lead.strongHook ? (
-            <div className="rounded-2xl bg-white/80 p-4 ring-1 ring-amber-200">
-              <p className="text-sm font-semibold text-slate-700">Strong hook</p>
-              <p className="mt-1 text-base font-semibold text-amber-950">{lead.strongHook}</p>
-            </div>
-          ) : null}
-          {lead.suggestedService ? <p className="text-sm text-slate-700"><span className="font-semibold">Suggested service:</span> {lead.suggestedService}</p> : null}
-          {lead.weakPoints?.length ? (
-            <div className="space-y-2">
-              {lead.weakPoints.map((point) => (
-                <div key={point} className="flex items-start gap-2 rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-700 ring-1 ring-amber-100">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                  <span>{point}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </Card>
+        {/* Pitch message (Google Maps scraped) */}
+        {lead.pitchMessage ? (
+          <Card className="space-y-3 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-700">Auto pitch message</p>
+            <p className="text-sm leading-6 text-blue-950">{lead.pitchMessage}</p>
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Send on WhatsApp
+            </a>
+          </Card>
+        ) : null}
 
+        {/* Why call this lead */}
+        {(lead.strongHook || lead.suggestedService || lead.weakPoints?.length) ? (
+          <Card className={cn("space-y-4", "border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50")}>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">Why call this lead?</p>
+            {lead.strongHook ? (
+              <div className="rounded-2xl bg-white/80 p-4 ring-1 ring-amber-200">
+                <p className="text-sm font-semibold text-slate-700">Strong hook</p>
+                <p className="mt-1 text-base font-semibold text-amber-950">{lead.strongHook}</p>
+              </div>
+            ) : null}
+            {lead.suggestedService ? (
+              <p className="text-sm text-slate-700">
+                <span className="font-semibold">Suggested service:</span> {lead.suggestedService}
+              </p>
+            ) : null}
+            {lead.weakPoints?.length ? (
+              <div className="space-y-2">
+                {lead.weakPoints.map((point) => (
+                  <div key={point} className="flex items-start gap-2 rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-700 ring-1 ring-amber-100">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <span>{point}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {/* Website info */}
         <Card className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Website info</p>
           <div className="flex items-center justify-between gap-3">
@@ -117,7 +159,12 @@ export default function LeadDetailPage() {
             <WebsiteStatusBadge websiteStatus={lead.websiteStatus ?? "no_website"} />
           </div>
           {lead.websiteUrl ? (
-            <a href={lead.websiteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 underline decoration-blue-200 underline-offset-4">
+            <a
+              href={lead.websiteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 underline decoration-blue-200 underline-offset-4"
+            >
               {lead.websiteUrl}
               <ExternalLink className="h-4 w-4" />
             </a>
@@ -129,6 +176,7 @@ export default function LeadDetailPage() {
           ) : null}
         </Card>
 
+        {/* Call script */}
         {lead.callScript ? (
           <Card className="space-y-3 border-slate-200 bg-slate-50">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Read before calling</p>
@@ -136,11 +184,13 @@ export default function LeadDetailPage() {
           </Card>
         ) : null}
 
+        {/* Call history */}
         <Card className="space-y-4">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Call history</p>
           <LeadTimeline logs={lead.callLogs} />
         </Card>
 
+        {/* Follow-up */}
         <Card className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Follow-up</p>
           <div className="rounded-2xl bg-slate-50 p-4">
@@ -155,8 +205,9 @@ export default function LeadDetailPage() {
         </Card>
       </div>
 
+      {/* Fixed bottom action bar */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 py-3 backdrop-blur">
-        <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto] gap-2">
+        <div className="mx-auto grid max-w-6xl grid-cols-3 gap-2">
           <a
             href={`tel:${lead.phone}`}
             onClick={() => setCallOpen(true)}
@@ -165,14 +216,23 @@ export default function LeadDetailPage() {
             <PhoneCall className="h-4 w-4" />
             Call
           </a>
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-white"
+          >
+            <MessageCircle className="h-4 w-4" />
+            WhatsApp
+          </a>
           <Button variant="secondary" className="min-h-[52px]" onClick={() => setCallOpen(true)}>
             <StickyNote className="h-4 w-4" />
             Update
           </Button>
         </div>
 
-        <div className="mx-auto mt-2 grid max-w-6xl gap-2 sm:grid-cols-[1fr_auto]">
-            <Select value={currentStatus} onChange={(event) => updateStatus(event.target.value)}>
+        <div className="mx-auto mt-2 max-w-6xl">
+          <Select value={currentStatus} onChange={(event) => updateStatus(event.target.value)}>
             <option value="new">New</option>
             <option value="called">Called</option>
             <option value="interested">Interested</option>
