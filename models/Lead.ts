@@ -14,32 +14,47 @@ const callLogSchema = new Schema(
 
 const leadSchema = new Schema(
   {
-    name: { type: String, required: [true, "Lead name is required"], trim: true },
+    // Core identity — name OR business_name (Google Maps scraper uses business_name)
+    name: { type: String, trim: true },
+    business_name: { type: String, trim: true }, // Google Maps scraper field
     ownerName: { type: String, trim: true },
     phone: { type: String, required: [true, "Phone is required"], trim: true },
-    whatsapp: { type: String, trim: true }, // WhatsApp number (may differ from phone)
+    whatsapp: { type: String, trim: true },
     email: { type: String, trim: true, lowercase: true },
     city: { type: String, trim: true },
-    niche: { type: String, required: [true, "Niche is required"], trim: true },
+
+    // Niche — niche OR category (Google Maps scraper uses category)
+    niche: { type: String, trim: true },
+    category: { type: String, trim: true }, // Google Maps scraper field
+
     businessDescription: { type: String, trim: true },
+
+    // Website — websiteStatus + websiteUrl OR has_website + website_url
     websiteStatus: { type: String, enum: ["no_website", "has_website", "website_is_bad"], default: "no_website" },
     websiteUrl: { type: String, trim: true },
+    has_website: { type: Boolean, default: false }, // Google Maps scraper field
+    website_url: { type: String, trim: true },      // Google Maps scraper field
+
     weakPoints: {
       type: [String],
       default: [],
-      validate: [(value: string[]) => Array.isArray(value), "Weak points must be an array"],
     },
     strongHook: { type: String, trim: true },
     suggestedService: { type: String, trim: true },
     callScript: { type: String, trim: true },
     source: { type: String, default: "google_research", trim: true },
-    // Google Maps scraped data fields
+
+    // Google Maps scraped data
     rating: { type: Number, default: null },
+    review_count: { type: Number, default: null }, // Google Maps scraper field
     reviewCount: { type: Number, default: null },
     score: { type: Number, default: null },
+    pitch_message: { type: String, trim: true },   // Google Maps scraper field
     pitchMessage: { type: String, trim: true },
+    is_generic: { type: Boolean, default: false }, // Google Maps scraper field
     isGeneric: { type: Boolean, default: false },
     hasWebsite: { type: Boolean, default: false },
+
     leadQuality: { type: String, enum: ["hot", "warm", "cold"], default: "warm" },
     assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null },
     status: {
@@ -51,10 +66,13 @@ const leadSchema = new Schema(
     followUpDate: { type: Date, default: null },
     followUpNote: { type: String, trim: true, default: "" },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    // Allow fields not in schema (scraper may send extra fields)
+    strict: false,
+  }
 );
 
-leadSchema.index({ name: "text", phone: "text", ownerName: "text", city: "text", niche: "text" });
 leadSchema.index({ assignedTo: 1, status: 1, followUpDate: 1 });
 
 export type LeadDocument = InferSchemaType<typeof leadSchema>;

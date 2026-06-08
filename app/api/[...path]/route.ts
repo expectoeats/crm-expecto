@@ -53,6 +53,60 @@ const callOutcomeStatus: Record<string, string> = {
   not_interested: "not_interested",
 };
 
+/**
+ * Normalizes a raw lead document (from DB or scraper) into a consistent shape
+ * that the frontend LeadRecord type expects.
+ * Handles both Google Maps scraper format and manual CRM format.
+ */
+function normalizeLead(doc: Record<string, unknown>): Record<string, unknown> {
+  const lead = { ...doc };
+
+  // business_name → name
+  if (!lead.name && lead.business_name) {
+    lead.name = lead.business_name;
+  }
+  // category → niche
+  if (!lead.niche && lead.category) {
+    lead.niche = lead.category;
+  }
+  // pitch_message → pitchMessage
+  if (!lead.pitchMessage && lead.pitch_message) {
+    lead.pitchMessage = lead.pitch_message;
+  }
+  // review_count → reviewCount
+  if (lead.reviewCount == null && lead.review_count != null) {
+    lead.reviewCount = lead.review_count;
+  }
+  // is_generic → isGeneric
+  if (lead.isGeneric == null && lead.is_generic != null) {
+    lead.isGeneric = lead.is_generic;
+  }
+  // has_website → websiteStatus
+  if (!lead.websiteStatus || lead.websiteStatus === "no_website") {
+    if (lead.has_website === true) {
+      lead.websiteStatus = "has_website";
+    }
+  }
+  // website_url → websiteUrl
+  if (!lead.websiteUrl && lead.website_url) {
+    lead.websiteUrl = lead.website_url;
+  }
+  // Fallback name
+  if (!lead.name) {
+    lead.name = "Unnamed Lead";
+  }
+  // Fallback niche
+  if (!lead.niche) {
+    lead.niche = "Other";
+  }
+
+  return lead;
+}
+
+function normalizeLeads(docs: Record<string, unknown>[]): Record<string, unknown>[] {
+  return docs.map(normalizeLead);
+}
+
 function json(
   payload: {
     success: boolean;
@@ -133,13 +187,17 @@ function buildLeadFilter(searchParams: URLSearchParams) {
   const to = searchParams.get("to");
 
   if (status) filter.status = status;
-  if (niche) filter.niche = niche;
+  if (niche) filter.$or = [...(filter.$or as unknown[] ?? []), { niche }, { category: niche }];
   if (assignedTo) filter.assignedTo = assignedTo;
   if (websiteStatus) filter.websiteStatus = websiteStatus;
   if (leadQuality) filter.leadQuality = leadQuality;
   if (city) filter.city = new RegExp(city, "i");
   if (search) {
-    filter.$or = [{ name: new RegExp(search, "i") }, { phone: new RegExp(search, "i") }];
+    filter.$or = [
+      { name: new RegExp(search, "i") },
+      { business_name: new RegExp(search, "i") },
+      { phone: new RegExp(search, "i") },
+    ];
   }
   if (from || to) {
     filter.createdAt = {};
@@ -455,7 +513,7 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       ]);
 
       return ok({
-        leads: items,
+        leads: normalizeLeads(items.map((doc) => doc.toObject())),
         pagination: { page, limit, total, pages: Math.ceil(total / limit) },
       });
     }
@@ -541,7 +599,7 @@ async function handleLeads(request: NextRequest, segments: string[]) {
         followUpDate: { $gte: start, $lte: end },
       }).sort({ followUpDate: 1 });
 
-      return ok({ leads });
+      return ok({ leads: normalizeLeads(leads.map((doc) => doc.toObject())) });
     }
 
     if (request.method !== "GET") return methodNotAllowed(["GET"]);
@@ -550,7 +608,7 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     if (status) filter.status = status;
 
     const leads = await Lead.find(filter).sort({ followUpDate: 1, status: 1, createdAt: -1 });
-    return ok({ leads });
+    return ok({ leads: normalizeLeads(leads.map((doc) => doc.toObject())) });
   }
 
   if (first === "auto-assign") {
@@ -605,7 +663,7 @@ async function handleLeads(request: NextRequest, segments: string[]) {
           return forbidden("You do not have access to this lead");
         }
       }
-      return ok({ lead });
+      return ok({ lead: normalizeLead(lead.toObject()) });
     } catch {
       return fail("Invalid lead id", 400);
     }

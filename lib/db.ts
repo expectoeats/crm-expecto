@@ -20,7 +20,7 @@ export async function connectDatabase() {
 
   if (!cached.promise) {
     cached.promise = mongoose.connect(mongoUri as string, {
-      dbName: "expectocrm",
+      dbName: "expecto_crm",
     });
   }
 
