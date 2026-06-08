@@ -38,6 +38,7 @@ type LeadBody = Record<string, unknown> & {
   outcome?: string;
   duration?: string;
   connected?: boolean;
+  via?: "call" | "whatsapp";
 };
 
 const defaultEmployeePassword = process.env.DEFAULT_EMPLOYEE_PASSWORD ?? "employee123";
@@ -402,6 +403,7 @@ async function handleLeadDetailAction(
   if (action === "calllog") {
     if (request.method !== "POST") return methodNotAllowed(["POST"]);
     const body = (await parseJson<LeadBody>(request)) ?? {};
+    const via = (body as Record<string, unknown>).via === "whatsapp" ? "whatsapp" : "call";
     const update: Record<string, unknown> = {
       $push: {
         callLogs: {
@@ -411,6 +413,7 @@ async function handleLeadDetailAction(
           notes: body.notes ?? "",
           outcome: body.outcome ?? "",
           duration: body.duration ?? "",
+          via,
         },
       },
       status: callOutcomeStatus[String(body.outcome ?? "")] ?? "called",
@@ -421,13 +424,9 @@ async function handleLeadDetailAction(
       update.followUpNote = body.followUpNote ?? "";
     }
 
-    const updatedLead = await Lead.findByIdAndUpdate(
-      leadId,
-      update,
-      { new: true }
-    );
+    const updatedLead = await Lead.findByIdAndUpdate(leadId, update, { new: true });
 
-    return json({ success: true, data: { lead: updatedLead } }, 201);
+    return json({ success: true, data: { lead: normalizeLead(updatedLead?.toObject() ?? {}) } }, 201);
   }
 
   if (action === "followup") {

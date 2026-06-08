@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useSWRConfig } from "swr";
-import { MessageCircle, PhoneCall, Star } from "lucide-react";
+import { CheckCircle2, Clock, MessageCircle, PhoneCall, Star } from "lucide-react";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, StatusBadge } from "@/components/badges";
 import { formatReadableDate, formatReadableDateTime } from "@/lib/time";
 import { CallUpdateModal } from "@/components/call-update-modal";
+import { apiFetch } from "@/lib/http";
 
 export type LeadRecord = {
   _id: string;
@@ -35,12 +36,49 @@ export type LeadRecord = {
   leadQuality: string;
   status: string;
   assignedTo?: { _id: string; name?: string } | string | null;
-  callLogs?: Array<{ calledBy?: { name?: string } | string; calledAt?: string; connected?: boolean; notes?: string; outcome?: string; duration?: string }>;
+  callLogs?: Array<{
+    calledBy?: { name?: string } | string;
+    calledAt?: string;
+    connected?: boolean;
+    notes?: string;
+    outcome?: string;
+    duration?: string;
+    via?: "call" | "whatsapp";
+  }>;
   followUpDate?: string;
   followUpNote?: string;
   createdAt?: string;
   updatedAt?: string;
 };
+
+/** Mark a lead as contacted via call or whatsapp (auto log, no modal needed) */
+export async function markContacted(
+  leadId: string,
+  via: "call" | "whatsapp"
+): Promise<void> {
+  await apiFetch(`/leads/${leadId}/calllog`, {
+    method: "POST",
+    body: JSON.stringify({
+      outcome: "no_answer",
+      connected: via === "whatsapp",
+      notes: via === "whatsapp" ? "WhatsApp message sent" : "Call initiated",
+      duration: "",
+      via,
+      followUpDate: "",
+      followUpNote: "",
+    }),
+  });
+}
+
+function getWhatsAppUrl(lead: LeadRecord) {
+  const number = (lead.whatsapp || lead.phone).replace(/\D/g, "");
+  const message = lead.pitchMessage
+    ? encodeURIComponent(lead.pitchMessage)
+    : encodeURIComponent(
+        `Namaste! ${lead.name} wale hain aap? Main aapke business ke baare mein baat karna chahta tha.`
+      );
+  return `https://wa.me/${number}?text=${message}`;
+}
 
 export function LeadCard({
   lead,
@@ -50,62 +88,128 @@ export function LeadCard({
   showActions?: boolean;
 }) {
   const [callOpen, setCallOpen] = useState(false);
+  const [contacting, setContacting] = useState(false);
   const { mutate } = useSWRConfig();
 
   async function refreshLeadLists() {
     await mutate((key) => typeof key === "string" && key.startsWith("/leads"));
   }
 
-  const whatsappNumber = (lead.whatsapp || lead.phone).replace(/\D/g, "");
-  const whatsappMessage = lead.pitchMessage
-    ? encodeURIComponent(lead.pitchMessage)
-    : encodeURIComponent(`Namaste! ${lead.name} wale hain aap? Main aapke business ke baare mein baat karna chahta tha.`);
-  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+  async function handleCall() {
+    setContacting(true);
+    setCallOpen(true);
+    try {
+      await markContacted(lead._id, "call");
+      await refreshLeadLists();
+    } finally {
+      setContacting(false);
+    }
+  }
+
+  async function handleWhatsApp() {
+    setContacting(true);
+    try {
+      await markContacted(lead._id, "whatsapp");
+      await refreshLeadLists();
+    } finally {
+      setContacting(false);
+    }
+  }
+
+  const whatsappUrl = getWhatsAppUrl(lead);
+  const isContacted = lead.status !== "new";
+  const lastLog = lead.callLogs?.[lead.callLogs.length - 1];
 
   return (
     <>
-      <Card className="overflow-hidden p-0">
+      <Card className={`overflow-hidden p-0 transition-all ${isContacted ? "opacity-90 ring-1 ring-slate-200" : "shadow-sm"}`}>
+        {/* Contacted ribbon */}
+        {isContacted ? (
+          <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2">
+            <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Contacted · {lead.status.replaceAll("_", " ")}
+            </span>
+            {lastLog?.calledAt ? (
+              <span className="ml-auto text-[11px] text-slate-400">
+                {formatReadableDateTime(lastLog.calledAt)}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="space-y-3 p-4">
+          {/* Header */}
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">{lead.name}</h3>
-              <p className="mt-1 text-sm text-slate-600">
-                {lead.ownerName ?? "Owner not added"} · {lead.city ?? "No city"}
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-base font-semibold text-slate-950">{lead.name}</h3>
+              <p className="mt-0.5 truncate text-sm text-slate-500">
+                {lead.ownerName ? `${lead.ownerName} · ` : ""}{lead.city ?? "No city"}
               </p>
               {lead.rating != null ? (
                 <p className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
                   <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                  {lead.rating} {lead.reviewCount != null ? `(${lead.reviewCount} reviews)` : ""}
-                  {lead.score != null ? <span className="ml-1 text-slate-500">· Score: {lead.score}</span> : null}
+                  {lead.rating}
+                  {lead.reviewCount != null ? (
+                    <span className="text-slate-400">({lead.reviewCount})</span>
+                  ) : null}
                 </p>
               ) : null}
             </div>
             <NicheBadge niche={lead.niche} />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          {/* Badges */}
+          <div className="flex flex-wrap gap-1.5">
             <LeadQualityBadge quality={lead.leadQuality} />
             <StatusBadge status={lead.status} />
-            {lead.followUpDate ? <Badge className="bg-orange-100 text-orange-800 ring-orange-200">Follow-up {formatReadableDate(lead.followUpDate)}</Badge> : null}
+            {lead.followUpDate ? (
+              <Badge className="bg-orange-100 text-orange-700 ring-orange-200">
+                <Clock className="mr-1 h-3 w-3" />
+                {formatReadableDate(lead.followUpDate)}
+              </Badge>
+            ) : null}
           </div>
 
+          {/* Pitch / Hook */}
           {lead.pitchMessage ? (
-            <div className="rounded-2xl bg-blue-50 p-3 ring-1 ring-blue-200">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700">Pitch message</p>
-              <p className="mt-1 line-clamp-2 text-sm text-blue-950">{lead.pitchMessage}</p>
+            <div className="rounded-xl bg-blue-50 px-3 py-2.5 ring-1 ring-blue-100">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-600">
+                Pitch
+              </p>
+              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-blue-900">
+                {lead.pitchMessage}
+              </p>
             </div>
           ) : lead.strongHook ? (
-            <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Why call this lead?</p>
-              <p className="mt-2 text-sm font-semibold text-amber-950">{lead.strongHook}</p>
+            <div className="rounded-xl bg-amber-50 px-3 py-2.5 ring-1 ring-amber-100">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-600">
+                Why call?
+              </p>
+              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-900">
+                {lead.strongHook}
+              </p>
             </div>
           ) : null}
 
-          <div className="grid grid-cols-3 gap-2">
+          {/* Last contact note (if contacted) */}
+          {isContacted && lastLog?.notes ? (
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-100">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Last note
+              </p>
+              <p className="mt-1 line-clamp-1 text-xs text-slate-600">{lastLog.notes}</p>
+            </div>
+          ) : null}
+
+          {/* Action buttons */}
+          <div className="grid grid-cols-3 gap-2 pt-1">
             <a
               href={`tel:${lead.phone}`}
-              onClick={() => setCallOpen(true)}
-              className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-3 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
+              onClick={handleCall}
+              className={`inline-flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl text-sm font-semibold text-white transition active:scale-[0.97] ${
+                contacting ? "bg-emerald-400" : "bg-emerald-500 hover:bg-emerald-600"
+              }`}
             >
               <PhoneCall className="h-4 w-4" />
               Call
@@ -114,22 +218,35 @@ export function LeadCard({
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-3 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
+              onClick={handleWhatsApp}
+              className="inline-flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl bg-[#25D366] text-sm font-semibold text-white transition hover:bg-[#1fba58] active:scale-[0.97]"
             >
               <MessageCircle className="h-4 w-4" />
-              WhatsApp
+              WA
             </a>
             <Link
               href={`/leads/${lead._id}`}
-              className="inline-flex min-h-[52px] items-center justify-center rounded-2xl bg-slate-100 px-3 py-3 text-sm font-semibold text-slate-900"
+              className="inline-flex min-h-[48px] items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 active:scale-[0.97]"
             >
               Details
             </Link>
           </div>
         </div>
-        {showActions ? <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">Tap Call, then save what happened after the conversation.</div> : null}
+
+        {showActions && !isContacted ? (
+          <div className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 text-[11px] text-slate-400">
+            Tap <span className="font-semibold text-emerald-600">Call</span> or{" "}
+            <span className="font-semibold text-[#25D366]">WhatsApp</span> to contact · lead moves to history automatically
+          </div>
+        ) : null}
       </Card>
-      <CallUpdateModal lead={lead} open={callOpen} onClose={() => setCallOpen(false)} onSaved={refreshLeadLists} />
+
+      <CallUpdateModal
+        lead={lead}
+        open={callOpen}
+        onClose={() => setCallOpen(false)}
+        onSaved={refreshLeadLists}
+      />
     </>
   );
 }
@@ -150,11 +267,18 @@ export function LeadCompactRow({
     await mutate((key) => typeof key === "string" && key.startsWith("/leads"));
   }
 
-  const whatsappNumber = (lead.whatsapp || lead.phone).replace(/\D/g, "");
-  const whatsappMessage = lead.pitchMessage
-    ? encodeURIComponent(lead.pitchMessage)
-    : encodeURIComponent(`Namaste! ${lead.name} wale hain aap? Main aapke business ke baare mein baat karna chahta tha.`);
-  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+  async function handleCall() {
+    setCallOpen(true);
+    await markContacted(lead._id, "call");
+    await refreshLeadLists();
+  }
+
+  async function handleWhatsApp() {
+    await markContacted(lead._id, "whatsapp");
+    await refreshLeadLists();
+  }
+
+  const whatsappUrl = getWhatsAppUrl(lead);
 
   return (
     <>
@@ -165,31 +289,30 @@ export function LeadCompactRow({
               type="checkbox"
               checked={checked}
               onChange={(event) => onCheckedChange(event.target.checked)}
-              className="mt-1 h-5 w-5 rounded border-slate-300 text-slate-950"
+              className="mt-1 h-5 w-5 rounded border-slate-300"
             />
           ) : null}
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold text-slate-950">{lead.name}</p>
-                <p className="truncate text-sm text-slate-600">
-                  {lead.ownerName ?? "Owner not added"} · {lead.phone}
+                <p className="truncate text-sm text-slate-500">
+                  {lead.ownerName ?? "No owner"} · {lead.phone}
                 </p>
               </div>
               <NicheBadge niche={lead.niche} />
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               <LeadQualityBadge quality={lead.leadQuality} />
               <StatusBadge status={lead.status} />
-              {lead.assignedTo ? <Badge className="bg-slate-100 text-slate-700 ring-slate-200">Assigned</Badge> : null}
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
               <a
                 href={`tel:${lead.phone}`}
-                onClick={() => setCallOpen(true)}
-                className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 text-sm font-semibold text-white"
+                onClick={handleCall}
+                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-semibold text-white"
               >
                 <PhoneCall className="h-4 w-4" />
                 Call
@@ -198,7 +321,8 @@ export function LeadCompactRow({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 text-sm font-semibold text-white"
+                onClick={handleWhatsApp}
+                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#25D366] text-sm font-semibold text-white"
               >
                 <MessageCircle className="h-4 w-4" />
                 WhatsApp
@@ -206,38 +330,90 @@ export function LeadCompactRow({
             </div>
             <Link
               href={`/leads/${lead._id}`}
-              className="mt-2 block text-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4"
+              className="mt-2 block text-center text-sm font-semibold text-slate-600 underline decoration-slate-300 underline-offset-4"
             >
               View Details
             </Link>
           </div>
         </div>
       </div>
-      <CallUpdateModal lead={lead} open={callOpen} onClose={() => setCallOpen(false)} onSaved={refreshLeadLists} />
+      <CallUpdateModal
+        lead={lead}
+        open={callOpen}
+        onClose={() => setCallOpen(false)}
+        onSaved={refreshLeadLists}
+      />
     </>
   );
 }
 
 export function LeadTimeline({ logs = [] }: { logs?: LeadRecord["callLogs"] }) {
   if (!logs.length) {
-    return <p className="text-sm text-slate-500">No call logs yet.</p>;
+    return (
+      <div className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
+        No contact history yet.
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="relative space-y-0">
+      {/* Vertical line */}
+      <div className="absolute left-[7px] top-2 bottom-2 w-px bg-slate-200" />
+
       {logs.map((log, index) => (
-        <div key={`${log.calledAt ?? index}`} className="flex gap-3">
-          <div className="mt-1 h-3 w-3 rounded-full bg-slate-950" />
-          <div className="flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-slate-950">{typeof log.calledBy === "string" ? "Team member" : log.calledBy?.name ?? "Team member"}</p>
-              <p className="text-xs text-slate-500">{formatReadableDateTime(log.calledAt)}</p>
+        <div key={`${log.calledAt ?? index}`} className="relative flex gap-4 pb-5 last:pb-0">
+          {/* Dot */}
+          <div
+            className={`relative z-10 mt-1 h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-white ${
+              log.connected ? "bg-emerald-500" : "bg-slate-300"
+            }`}
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-slate-900">
+                  {typeof log.calledBy === "string"
+                    ? "Team member"
+                    : (log.calledBy?.name ?? "Team member")}
+                </p>
+                {(log as { via?: string }).via === "whatsapp" ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#25D366]/10 px-2 py-0.5 text-[10px] font-semibold text-[#1a9e4a]">
+                    <MessageCircle className="h-2.5 w-2.5" />
+                    WhatsApp
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    <PhoneCall className="h-2.5 w-2.5" />
+                    Call
+                  </span>
+                )}
+              </div>
+              <p className="shrink-0 text-[11px] text-slate-400">
+                {formatReadableDateTime(log.calledAt)}
+              </p>
             </div>
-            <p className="mt-1 text-sm text-slate-600">{log.notes || "No notes added"}</p>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
-              <span className={log.connected ? "text-emerald-700" : "text-orange-700"}>{log.connected ? "Connected" : "Not connected"}</span>
-              {log.duration ? <span className="text-slate-500">Duration: {log.duration}</span> : null}
-              {log.outcome ? <span className="text-slate-500">Outcome: {log.outcome.replaceAll("_", " ")}</span> : null}
+
+            <p className="mt-1 text-sm text-slate-600">
+              {log.notes || "No notes added"}
+            </p>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+              <span
+                className={`font-semibold ${
+                  log.connected ? "text-emerald-600" : "text-slate-400"
+                }`}
+              >
+                {log.connected ? "✓ Connected" : "✗ Not connected"}
+              </span>
+              {log.duration ? (
+                <span className="text-slate-400">· {log.duration}</span>
+              ) : null}
+              {log.outcome ? (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
+                  {log.outcome.replaceAll("_", " ")}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>

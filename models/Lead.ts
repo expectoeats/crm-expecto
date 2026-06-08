@@ -8,6 +8,7 @@ const callLogSchema = new Schema(
     duration: { type: String },
     outcome: { type: String, trim: true },
     notes: { type: String, trim: true },
+    via: { type: String, enum: ["call", "whatsapp"], default: "call" },
   },
   { _id: false }
 );
