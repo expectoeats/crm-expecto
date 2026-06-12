@@ -21,6 +21,14 @@ export async function apiFetch<T>(
 
   const data = (await response.json().catch(() => ({}))) as ApiEnvelope<T> | { message?: string };
 
+  // 401 = cookie expired or missing → redirect to login
+  if (response.status === 401) {
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.replace("/login");
+    }
+    throw new Error("Session expired. Please log in again.");
+  }
+
   if (!response.ok) {
     throw new Error("message" in data && data.message ? data.message : "Request failed");
   }
