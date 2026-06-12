@@ -355,12 +355,19 @@ function PipelineFunnel({ data }: { data: Array<{ _id: string; count: number }> 
   );
 }
 
+// ─── SWR options — dashboard data doesn't need aggressive revalidation ───────
+const SWR_OPTS = {
+  revalidateOnFocus: false,
+  dedupingInterval: 30_000,   // 30 s — same key won't re-fetch within this window
+  refreshInterval: 120_000,   // background refresh every 2 min
+} as const;
+
 // ─── Main Dashboard Page ─────────────────────────────────────────────────────
 
 export default function AdminDashboardPage() {
-  const { data: stats, isLoading: statsLoading }           = useSWR("admin-stats", statsFetcher);
-  const { data: leadStats, isLoading: leadStatsLoading }   = useSWR("admin-lead-stats", leadStatsFetcher);
-  const { data: employees = [], isLoading: empLoading }    = useSWR("admin-employees", employeesFetcher);
+  const { data: stats, isLoading: statsLoading }           = useSWR("admin-stats", statsFetcher, SWR_OPTS);
+  const { data: leadStats, isLoading: leadStatsLoading }   = useSWR("admin-lead-stats", leadStatsFetcher, SWR_OPTS);
+  const { data: employees = [], isLoading: empLoading }    = useSWR("admin-employees", employeesFetcher, SWR_OPTS);
 
   const summary = stats?.summary;
   const byStatus = stats?.leadsByStatus ?? [];

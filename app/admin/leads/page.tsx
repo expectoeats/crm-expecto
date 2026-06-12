@@ -143,10 +143,12 @@ function AdminLeadsInner() {
 
   const swrKey = `/leads?page=${page}&limit=20&status=${status}&niche=${encodeURIComponent(niche)}&assignedTo=${employee}&leadQuality=${leadQuality}&websiteStatus=${websiteStatus}&city=${city}&search=${debouncedSearch}&from=${fromDate}&to=${toDate}&tier=${tierFilter}&sort=${sortOption}`;
 
-  const { data, isLoading, mutate } = useSWR(swrKey, leadsFetcher);
-  const { data: employees = [] }    = useSWR("admin-lead-employees", employeesFetcher);
-  const { data: stats }             = useSWR("admin-leads-stats", statsFetcher);
-  const { data: nichesData }        = useSWR("admin-lead-niches", nichesFetcher);
+  const SWR_STATIC = { revalidateOnFocus: false, dedupingInterval: 30_000 } as const;
+
+  const { data, isLoading, mutate } = useSWR(swrKey, leadsFetcher, { revalidateOnFocus: false });
+  const { data: employees = [] }    = useSWR("admin-lead-employees", employeesFetcher, SWR_STATIC);
+  const { data: stats }             = useSWR("admin-leads-stats", statsFetcher, SWR_STATIC);
+  const { data: nichesData }        = useSWR("admin-lead-niches", nichesFetcher, { ...SWR_STATIC, dedupingInterval: 300_000 });
   const categories  = nichesData?.categories ?? [];
   const rawToBroad  = nichesData?.rawToBroad ?? {};
 

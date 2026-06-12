@@ -31,8 +31,14 @@ const resetRequestFetcher = async () =>
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: user } = useSWR("admin-me", fetcher);
-  const { data: resetRequestCount = 0 } = useSWR("admin-password-reset-count", resetRequestFetcher);
+  // Long revalidation — auth/me barely changes, no need to poll every 2s
+  const { data: user } = useSWR("admin-me", fetcher, { revalidateOnFocus: false, dedupingInterval: 60_000 });
+  // Only refetch reset count every 2 minutes — not on every focus/nav
+  const { data: resetRequestCount = 0 } = useSWR("admin-password-reset-count", resetRequestFetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 120_000,
+    refreshInterval: 120_000,
+  });
 
   async function handleLogout() {
     await apiFetch("/auth/logout", { method: "POST" });

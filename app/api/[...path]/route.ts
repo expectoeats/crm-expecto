@@ -1219,44 +1219,53 @@ async function handleUsers(request: NextRequest, segments: string[]) {
     const payload = await requireAdmin(request);
     if (!payload) return unauthorized();
 
-    const employees = await User.find({ role: "employee" }).lean();
-    const allLeads = await Lead.find().lean();
+    // Single aggregate: group lead counts per employee — no full collection scan in JS
+    const [employees, leadStats] = await Promise.all([
+      User.find({ role: "employee" }).lean(),
+      Lead.aggregate([
+        {
+          $group: {
+            _id: "$assignedTo",
+            totalLeads: { $sum: 1 },
+            activeLeads: {
+              $sum: {
+                $cond: [
+                  { $in: ["$status", ["new", "called", "interested", "callback", "proposal_sent"]] },
+                  1, 0,
+                ],
+              },
+            },
+            calledLeads: {
+              $sum: { $cond: [{ $eq: ["$status", "called"] }, 1, 0] },
+            },
+            interestedLeads: {
+              $sum: { $cond: [{ $eq: ["$status", "interested"] }, 1, 0] },
+            },
+            closedLeads: {
+              $sum: {
+                $cond: [
+                  { $in: ["$status", ["closed_won", "closed_lost"]] },
+                  1, 0,
+                ],
+              },
+            },
+          },
+        },
+      ]),
+    ]);
 
-    const countsByEmployee = new Map<
-      string,
-      {
-        totalLeads: number;
-        activeLeads: number;
-        calledLeads: number;
-        interestedLeads: number;
-        closedLeads: number;
-      }
-    >();
-
-    for (const lead of allLeads) {
-      if (!lead.assignedTo) continue;
-      const key = lead.assignedTo.toString();
-      const existing = countsByEmployee.get(key) ?? {
-        totalLeads: 0,
-        activeLeads: 0,
-        calledLeads: 0,
-        interestedLeads: 0,
-        closedLeads: 0,
-      };
-
-      existing.totalLeads += 1;
-      if (["new", "called", "interested", "callback", "proposal_sent"].includes(lead.status)) {
-        existing.activeLeads += 1;
-      }
-      if (lead.status === "called") existing.calledLeads += 1;
-      if (lead.status === "interested") existing.interestedLeads += 1;
-      if (["closed_won", "closed_lost"].includes(lead.status)) existing.closedLeads += 1;
-      countsByEmployee.set(key, existing);
+    // Build a lookup map from the aggregate result
+    const statsMap = new Map<string, {
+      totalLeads: number; activeLeads: number;
+      calledLeads: number; interestedLeads: number; closedLeads: number;
+    }>();
+    for (const row of leadStats) {
+      if (row._id) statsMap.set(row._id.toString(), row);
     }
 
     return ok({
       employees: employees.map((employee) => {
-        const stats = countsByEmployee.get(employee._id.toString());
+        const stats = statsMap.get(employee._id.toString());
         return {
           ...employee,
           passwordResetRequested: employee.passwordResetRequested ?? false,
@@ -1385,24 +1394,46 @@ async function handleStats(request: NextRequest) {
   const payload = await requireAdmin(request);
   if (!payload) return unauthorized();
 
-  const [totalLeads, statusGroups, nicheGroups, employeeGroups, wonCount, employeeCount] = await Promise.all([
+  const { start, end } = getIstDayRange();
+
+  // All queries in a single Promise.all — no serial waits
+  const [
+    totalLeads,
+    statusGroups,
+    nicheGroups,
+    employeeGroups,
+    wonCount,
+    hotLeads,
+    employeeCount,
+    todayFollowUps,
+  ] = await Promise.all([
     Lead.countDocuments(),
     Lead.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
-    Lead.aggregate([{ $group: { _id: "$niche", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
     Lead.aggregate([
-      { $lookup: { from: "users", localField: "assignedTo", foreignField: "_id", as: "employee" } },
-      { $unwind: { path: "$employee", preserveNullAndEmptyArrays: true } },
-      { $group: { _id: "$assignedTo", name: { $first: "$employee.name" }, count: { $sum: 1 } } },
+      { $match: { $or: [{ niche: { $ne: null } }, { category: { $ne: null } }] } },
+      { $group: { _id: { $ifNull: ["$niche", "$category"] }, count: { $sum: 1 } } },
+      { $match: { _id: { $ne: null } } },
+      { $sort: { count: -1 } },
+      { $limit: 15 },
+    ]),
+    // Lightweight employee grouping — no $lookup, just ObjectId grouping
+    Lead.aggregate([
+      { $match: { assignedTo: { $ne: null } } },
+      { $group: { _id: "$assignedTo", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]),
     Lead.countDocuments({ status: "closed_won" }),
+    Lead.countDocuments({ leadQuality: "hot" }),
     User.countDocuments({ role: "employee", isActive: true }),
+    Lead.countDocuments({ followUpDate: { $gte: start, $lte: end } }),
   ]);
 
-  const { start, end } = getIstDayRange();
-  const todayFollowUps = await Lead.countDocuments({
-    followUpDate: { $gte: start, $lte: end },
-  });
+  // Enrich employee groups with names — one User query for just the IDs we need
+  const employeeIds = employeeGroups.map((g: { _id: unknown }) => g._id).filter(Boolean);
+  const employeeNames = employeeIds.length
+    ? await User.find({ _id: { $in: employeeIds } }, { name: 1 }).lean()
+    : [];
+  const nameMap = new Map(employeeNames.map((u) => [u._id.toString(), u.name]));
 
   const conversionRate = totalLeads === 0 ? 0 : Math.round((wonCount / totalLeads) * 100);
 
@@ -1410,14 +1441,18 @@ async function handleStats(request: NextRequest) {
     summary: {
       totalLeads,
       todayFollowUps,
-      hotLeads: await Lead.countDocuments({ leadQuality: "hot" }),
+      hotLeads,
       closedWon: wonCount,
       conversionRate,
       employees: employeeCount,
     },
     leadsByStatus: statusGroups,
     leadsByNiche: nicheGroups,
-    leadsByEmployee: employeeGroups,
+    leadsByEmployee: employeeGroups.map((g: { _id: unknown; count: number }) => ({
+      _id: g._id,
+      name: g._id ? nameMap.get(g._id.toString()) ?? "Unknown" : "Unassigned",
+      count: g.count,
+    })),
   });
 }
 
