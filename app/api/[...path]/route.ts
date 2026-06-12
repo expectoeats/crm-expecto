@@ -54,6 +54,48 @@ const callOutcomeStatus: Record<string, string> = {
   not_interested: "not_interested",
 };
 
+type TierResult = { tier: "hot" | "warm" | "cold"; label: string; color: string };
+
+/**
+ * Calculates the lead tier from rating/review_count/has_website/status fields.
+ * Works on both raw DB docs and normalized docs.
+ */
+function calculateTier(lead: Record<string, unknown>): TierResult {
+  const r = Number(lead.rating ?? 0);
+  const rv = Number(lead.review_count ?? lead.reviewCount ?? 0);
+  // has_website can be a boolean OR derived from websiteStatus
+  const noWeb =
+    lead.has_website === false ||
+    lead.has_website === undefined && lead.websiteStatus !== "has_website";
+  const isNew = lead.status === "new";
+
+  if (r >= 4.0 && rv >= 20 && noWeb && isNew)
+    return { tier: "hot", label: "🔥 Hot", color: "#ff4757" };
+
+  if (r >= 3.5 && rv >= 10 && noWeb)
+    return { tier: "warm", label: "⚡ Warm", color: "#ffa502" };
+
+  return { tier: "cold", label: "🧊 Cold", color: "#747d8c" };
+}
+
+/**
+ * Calculates priority score — single number ranking lead contact-worthiness.
+ * max 50 pts (rating) + max 30 pts (reviews) + 20 pts (no website)
+ */
+function calcPriorityScore(lead: Record<string, unknown>): number {
+  const r = Number(lead.rating ?? 0);
+  const rv = Number(lead.review_count ?? lead.reviewCount ?? 0);
+  const noWeb =
+    lead.has_website === false ||
+    (lead.has_website === undefined && lead.websiteStatus !== "has_website");
+
+  return (
+    r * 10 +
+    (Math.min(rv, 200) / 200) * 30 +
+    (noWeb ? 20 : 0)
+  );
+}
+
 /**
  * Normalizes a raw lead document (from DB or scraper) into a consistent shape
  * that the frontend LeadRecord type expects.
@@ -100,6 +142,13 @@ function normalizeLead(doc: Record<string, unknown>): Record<string, unknown> {
   if (!lead.niche) {
     lead.niche = "Other";
   }
+
+  // Attach computed tier + priority_score
+  const tierResult = calculateTier(lead);
+  lead.tier = tierResult.tier;
+  lead.tierLabel = tierResult.label;
+  lead.tierColor = tierResult.color;
+  lead.priority_score = calcPriorityScore(lead);
 
   return lead;
 }
@@ -186,6 +235,7 @@ function buildLeadFilter(searchParams: URLSearchParams) {
   const search = searchParams.get("search");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const tier = searchParams.get("tier");
 
   if (status) filter.status = status;
   if (niche) {
@@ -212,6 +262,27 @@ function buildLeadFilter(searchParams: URLSearchParams) {
     filter.createdAt = {};
     if (from) (filter.createdAt as Record<string, Date>).$gte = new Date(from);
     if (to) (filter.createdAt as Record<string, Date>).$lte = new Date(to);
+  }
+
+  // Tier filter — applies DB-level conditions matching calculateTier logic
+  if (tier === "hot") {
+    filter.rating = { $gte: 4.0 };
+    filter.review_count = { $gte: 20 };
+    filter.has_website = false;
+    filter.status = "new";
+  } else if (tier === "warm") {
+    filter.rating = { $gte: 3.5 };
+    filter.review_count = { $gte: 10 };
+    filter.has_website = false;
+    // warm doesn't require status=new
+    if (status) filter.status = status;
+  } else if (tier === "cold") {
+    filter.$or = [
+      { review_count: { $lt: 10 } },
+      { rating: { $lt: 3.5 } },
+      { rating: null },
+      { review_count: null },
+    ];
   }
 
   return filter;
@@ -566,13 +637,30 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       const filter = buildLeadFilter(request.nextUrl.searchParams);
       const skip = (page - 1) * limit;
 
+      // Build sort order
+      const sortParam = request.nextUrl.searchParams.get("sort") ?? "priority_score";
+      type MongoSort = Record<string, 1 | -1>;
+      const sortMap: Record<string, MongoSort> = {
+        rating:         { rating: -1 },
+        review_count:   { review_count: -1 },
+        newest:         { createdAt: -1 },
+        priority_score: { rating: -1, review_count: -1 },
+      };
+      const sortOrder: MongoSort = sortMap[sortParam] ?? sortMap["priority_score"];
+
       const [items, total] = await Promise.all([
-        Lead.find(filter).populate("assignedTo").sort({ followUpDate: 1, status: 1, createdAt: -1 }).skip(skip).limit(limit),
+        Lead.find(filter).populate("assignedTo").sort(sortOrder).skip(skip).limit(limit),
         Lead.countDocuments(filter),
       ]);
 
+      // Normalize, then sort by priority_score in JS (since it's computed)
+      const normalized = normalizeLeads(items.map((doc) => doc.toObject()));
+      if (sortParam === "priority_score") {
+        normalized.sort((a, b) => (Number(b.priority_score ?? 0)) - (Number(a.priority_score ?? 0)));
+      }
+
       return ok({
-        leads: normalizeLeads(items.map((doc) => doc.toObject())),
+        leads: normalized,
         pagination: { page, limit, total, pages: Math.ceil(total / limit) },
       });
     }

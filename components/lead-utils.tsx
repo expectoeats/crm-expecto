@@ -5,7 +5,7 @@ import { useSWRConfig } from "swr";
 import { Calendar, CheckCircle, Circle, Clock, Eye, Flame, MessageCircle, Phone, PhoneCall, RefreshCw, Send, Star, ThumbsDown, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
-import { LeadQualityBadge, NicheBadge } from "@/components/badges";
+import { LeadQualityBadge, NicheBadge, TierBadge } from "@/components/badges";
 import { formatReadableDate, formatReadableDateTime } from "@/lib/time";
 import { apiFetch } from "@/lib/http";
 import { statusConfig, cn } from "@/lib/ui";
@@ -40,6 +40,10 @@ export type LeadRecord = {
   rating?: number;
   reviewCount?: number;
   score?: number;
+  priority_score?: number;
+  tier?: "hot" | "warm" | "cold";
+  tierLabel?: string;
+  tierColor?: string;
   pitchMessage?: string;
   isGeneric?: boolean;
   hasWebsite?: boolean;
@@ -201,6 +205,7 @@ export function LeadCard({
             </button>
           </div>
           <NicheBadge niche={lead.niche} />
+          <TierBadge tier={lead.tier} label={lead.tierLabel} />
           {/* Assign initials */}
           {assignedName ? (
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600" title={assignedName}>

@@ -91,6 +91,22 @@ export function WebsiteStatusBadge({ websiteStatus }: { websiteStatus: string })
   );
 }
 
+export function TierBadge({ tier, label }: { tier?: string; label?: string }) {
+  if (!tier) return null;
+  const styles: Record<string, string> = {
+    hot:  "bg-red-100 text-red-700 ring-red-300",
+    warm: "bg-amber-100 text-amber-700 ring-amber-300",
+    cold: "bg-slate-100 text-slate-500 ring-slate-200",
+  };
+  const cls = styles[tier] ?? "bg-slate-100 text-slate-500 ring-slate-200";
+  const text = label ?? (tier === "hot" ? "🔥 Hot" : tier === "warm" ? "⚡ Warm" : "🧊 Cold");
+  return (
+    <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset", cls)}>
+      {text}
+    </span>
+  );
+}
+
 export function NicheBadge({ niche }: { niche: string }) {
   const palette = [
     "bg-blue-100 text-blue-700 ring-blue-200",

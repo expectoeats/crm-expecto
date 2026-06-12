@@ -101,6 +101,15 @@ leadSchema.index({ assignedTo: 1, status: 1, followUpDate: 1 });
 leadSchema.index({ updatedAt: -1 });
 leadSchema.index({ last_contacted_at: -1 });
 
+// Smart scoring indexes
+leadSchema.index({ rating: -1 });
+leadSchema.index({ review_count: -1 });
+leadSchema.index({ has_website: 1 });
+leadSchema.index({ status: 1 });
+leadSchema.index({ createdAt: -1 });
+// Compound index for hot lead query
+leadSchema.index({ has_website: 1, rating: -1, review_count: -1 });
+
 export type LeadDocument = InferSchemaType<typeof leadSchema>;
 
 export const Lead = (models.Lead as mongoose.Model<LeadDocument>) || model<LeadDocument>("Lead", leadSchema);

@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import {
   ChevronDown, ChevronLeft, ChevronRight, Download, Filter,
-  MessageCircle, PhoneCall, Plus, Search, Shuffle, Star, X,
+  MessageCircle, PhoneCall, Plus, Search, Shuffle, Star, TrendingUp, X,
 } from "lucide-react";
 import { Card, EmptyState, Input, Select, SectionTitle, Button, SkeletonCard } from "@/components/ui";
-import { LeadQualityBadge, NicheBadge } from "@/components/badges";
+import { LeadQualityBadge, NicheBadge, TierBadge } from "@/components/badges";
 import { type LeadRecord } from "@/components/lead-utils";
 import { LeadDrawer } from "@/components/lead-drawer";
 import { apiFetch } from "@/lib/http";
@@ -111,6 +111,8 @@ export default function AdminLeadsPage() {
   const [fromDate, setFromDate]           = useState("");
   const [toDate, setToDate]               = useState("");
   const [filtersOpen, setFiltersOpen]     = useState(false);
+  const [tierFilter, setTierFilter]       = useState("");
+  const [sortOption, setSortOption]       = useState("priority_score");
 
   // pagination — resets on any filter change
   const [page, setPage] = useState(1);
@@ -121,14 +123,14 @@ export default function AdminLeadsPage() {
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [drawerLeadId, setDrawerLeadId]   = useState<string | null>(null);
 
-  useEffect(() => { setPage(1); }, [status, niche, employee, leadQuality, websiteStatus, city, debouncedSearch, fromDate, toDate]);
+  useEffect(() => { setPage(1); }, [status, niche, employee, leadQuality, websiteStatus, city, debouncedSearch, fromDate, toDate, tierFilter, sortOption]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search), 300);
     return () => window.clearTimeout(t);
   }, [search]);
 
-  const swrKey = `/leads?page=${page}&limit=20&status=${status}&niche=${encodeURIComponent(niche)}&assignedTo=${employee}&leadQuality=${leadQuality}&websiteStatus=${websiteStatus}&city=${city}&search=${debouncedSearch}&from=${fromDate}&to=${toDate}`;
+  const swrKey = `/leads?page=${page}&limit=20&status=${status}&niche=${encodeURIComponent(niche)}&assignedTo=${employee}&leadQuality=${leadQuality}&websiteStatus=${websiteStatus}&city=${city}&search=${debouncedSearch}&from=${fromDate}&to=${toDate}&tier=${tierFilter}&sort=${sortOption}`;
 
   const { data, isLoading, mutate } = useSWR(swrKey, leadsFetcher);
   const { data: employees = [] }    = useSWR("admin-lead-employees", employeesFetcher);
@@ -140,13 +142,13 @@ export default function AdminLeadsPage() {
   const leads      = data?.leads ?? [];
   const pagination = data?.pagination;
 
-  const activeFilterCount = [status, selectedCategory, employee, leadQuality, websiteStatus, city, fromDate, toDate]
+  const activeFilterCount = [status, selectedCategory, employee, leadQuality, websiteStatus, city, fromDate, toDate, tierFilter]
     .filter(Boolean).length;
 
   function clearAll() {
     setStatus(""); setNiche(""); setSelectedCategory(""); setEmployee(""); setLeadQuality("");
     setWebsiteStatus(""); setCity(""); setSearch(""); setDebouncedSearch("");
-    setFromDate(""); setToDate(""); setPage(1);
+    setFromDate(""); setToDate(""); setTierFilter(""); setSortOption("priority_score"); setPage(1);
   }
 
   async function reassignSelected() {
@@ -236,6 +238,53 @@ export default function AdminLeadsPage() {
           ))}
         </div>
       ) : null}
+
+      {/* ── TIER FILTER BUTTONS + SORT ── */}
+      <div className="space-y-2">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          {(
+            [
+              { key: "",     label: "📋 All" },
+              { key: "hot",  label: "🔥 Hot" },
+              { key: "warm", label: "⚡ Warm" },
+              { key: "cold", label: "🧊 Cold" },
+            ] as { key: string; label: string }[]
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => { setTierFilter(key); setPage(1); }}
+              className={`shrink-0 rounded-2xl px-4 py-2 text-xs font-bold transition active:scale-[0.97] ${
+                tierFilter === key
+                  ? key === "hot"
+                    ? "bg-red-500 text-white shadow-sm"
+                    : key === "warm"
+                    ? "bg-amber-400 text-white shadow-sm"
+                    : key === "cold"
+                    ? "bg-slate-400 text-white shadow-sm"
+                    : "bg-slate-950 text-white shadow-sm"
+                  : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 shrink-0 text-slate-400" />
+          <select
+            value={sortOption}
+            onChange={(e) => { setSortOption(e.target.value); setPage(1); }}
+            className="flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400"
+          >
+            <option value="priority_score">🏆 Score (Best First)</option>
+            <option value="rating">⭐ Best Rating</option>
+            <option value="review_count">💬 Most Reviews</option>
+            <option value="newest">🕐 Newest First</option>
+          </select>
+        </div>
+      </div>
 
       {/* ── SEARCH + FILTER TOGGLE ── */}
       <div className="flex gap-2">
@@ -466,7 +515,7 @@ function LeadCardAdmin({
     <div className={`overflow-hidden rounded-2xl bg-white ring-1 transition-all ${selected ? "ring-slate-950 shadow-md" : "ring-slate-200 shadow-sm"}`}>
       <div className="p-4 space-y-3">
 
-        {/* ROW 1 — name + niche + checkbox */}
+        {/* ROW 1 — name + niche + tier + checkbox */}
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <button type="button" onClick={onView} className="text-left">
@@ -484,6 +533,7 @@ function LeadCardAdmin({
             </p>
           </div>
           <NicheBadge niche={lead.niche} />
+          <TierBadge tier={lead.tier} label={lead.tierLabel} />
           <label className="flex cursor-pointer items-center">
             <input
               type="checkbox"

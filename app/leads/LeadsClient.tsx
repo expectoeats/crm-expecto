@@ -27,6 +27,8 @@ function startOfIstDate(value: Date) {
 }
 
 type Tab = "active" | "contacted";
+type TierFilter = "all" | "hot" | "warm" | "cold";
+type SortOption = "priority_score" | "rating" | "review_count" | "newest";
 
 export default function LeadsClient({
   initialStatus = "",
@@ -42,6 +44,8 @@ export default function LeadsClient({
   const [followupOnly, setFollowupOnly] = useState(initialFollowupOnly);
   const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
   const [activeStatFilter, setActiveStatFilter] = useState<string | null>(null);
+  const [tierFilter, setTierFilter] = useState<TierFilter>("all");
+  const [sortOption, setSortOption] = useState<SortOption>("priority_score");
   const lastPollRef = useRef(new Date().toISOString());
 
   useEffect(() => {
@@ -80,30 +84,40 @@ export default function LeadsClient({
     const today = startOfIstDate(new Date());
     const all = leads ?? [];
 
-    const active = all
-      .filter((l) => ACTIVE_STATUSES.includes(l.status))
-      .filter((l) => {
-        if (!activeStatFilter) return true;
-        if (activeStatFilter === "new_today") {
-          const created = startOfIstDate(new Date(l.createdAt ?? 0));
-          return created === today;
-        }
-        return true;
-      })
-      .filter((l) => {
-        const q = debouncedSearch.trim().toLowerCase();
-        return !q || `${l.name} ${l.phone} ${l.ownerName ?? ""}`.toLowerCase().includes(q);
-      })
-      .filter((l) => {
-        if (!followupOnly) return true;
-        return l.followUpDate ? startOfIstDate(new Date(l.followUpDate)) === today : false;
-      })
-      .sort((a, b) => {
-        const q: Record<string, number> = { hot: 0, warm: 1, cold: 2 };
-        const qa = q[a.leadQuality] ?? 3, qb = q[b.leadQuality] ?? 3;
-        if (qa !== qb) return qa - qb;
-        return (b.score ?? 0) - (a.score ?? 0);
+    function applySort(arr: LeadRecord[]): LeadRecord[] {
+      return [...arr].sort((a, b) => {
+        if (sortOption === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
+        if (sortOption === "review_count") return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
+        if (sortOption === "newest") return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+        // default: priority_score
+        return (b.priority_score ?? b.score ?? 0) - (a.priority_score ?? a.score ?? 0);
       });
+    }
+
+    const active = applySort(
+      all
+        .filter((l) => ACTIVE_STATUSES.includes(l.status))
+        .filter((l) => {
+          if (!activeStatFilter) return true;
+          if (activeStatFilter === "new_today") {
+            const created = startOfIstDate(new Date(l.createdAt ?? 0));
+            return created === today;
+          }
+          return true;
+        })
+        .filter((l) => {
+          if (tierFilter === "all") return true;
+          return l.tier === tierFilter;
+        })
+        .filter((l) => {
+          const q = debouncedSearch.trim().toLowerCase();
+          return !q || `${l.name} ${l.phone} ${l.ownerName ?? ""}`.toLowerCase().includes(q);
+        })
+        .filter((l) => {
+          if (!followupOnly) return true;
+          return l.followUpDate ? startOfIstDate(new Date(l.followUpDate)) === today : false;
+        })
+    );
 
     const contacted = all
       .filter((l) => CONTACTED_STATUSES.includes(l.status))
@@ -116,7 +130,7 @@ export default function LeadsClient({
       );
 
     return { activeLeads: active, contactedLeads: contacted };
-  }, [leads, debouncedSearch, followupOnly, activeStatFilter]);
+  }, [leads, debouncedSearch, followupOnly, activeStatFilter, tierFilter, sortOption]);
 
   const currentLeads = tab === "active" ? activeLeads : contactedLeads;
   const followUpsToday = stats?.follow_ups_today ?? 0;
@@ -193,6 +207,57 @@ export default function LeadsClient({
             className="pl-11"
           />
         </div>
+
+        {/* TIER FILTER BUTTONS + SORT */}
+        {tab === "active" ? (
+          <div className="space-y-2">
+            {/* Tier filter row */}
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+              {(
+                [
+                  { key: "all", label: "📋 All" },
+                  { key: "hot", label: "🔥 Hot" },
+                  { key: "warm", label: "⚡ Warm" },
+                  { key: "cold", label: "🧊 Cold" },
+                ] as { key: TierFilter; label: string }[]
+              ).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTierFilter(key)}
+                  className={`shrink-0 rounded-2xl px-4 py-2 text-xs font-bold transition ${
+                    tierFilter === key
+                      ? key === "hot"
+                        ? "bg-red-500 text-white shadow-sm"
+                        : key === "warm"
+                        ? "bg-amber-400 text-white shadow-sm"
+                        : key === "cold"
+                        ? "bg-slate-400 text-white shadow-sm"
+                        : "bg-slate-950 text-white shadow-sm"
+                      : "bg-white text-slate-600 ring-1 ring-slate-200"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Sort dropdown */}
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 shrink-0 text-slate-400" />
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                className="flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400"
+              >
+                <option value="priority_score">🏆 Score (Best First)</option>
+                <option value="rating">⭐ Best Rating</option>
+                <option value="review_count">💬 Most Reviews</option>
+                <option value="newest">🕐 Newest First</option>
+              </select>
+            </div>
+          </div>
+        ) : null}
 
         {/* Tabs */}
         <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
