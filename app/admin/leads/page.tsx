@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import {
   ChevronDown, ChevronLeft, ChevronRight, Download, Filter,
@@ -98,21 +99,31 @@ function AssignDropdown({ lead, employees, onAssigned }: {
 }
 
 export default function AdminLeadsPage() {
-  // filters
-  const [status, setStatus]               = useState("");
-  const [niche, setNiche]                 = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [employee, setEmployee]           = useState("");
-  const [leadQuality, setLeadQuality]     = useState("");
-  const [websiteStatus, setWebsiteStatus] = useState("");
-  const [city, setCity]                   = useState("");
-  const [search, setSearch]               = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [fromDate, setFromDate]           = useState("");
-  const [toDate, setToDate]               = useState("");
-  const [filtersOpen, setFiltersOpen]     = useState(false);
-  const [tierFilter, setTierFilter]       = useState("");
-  const [sortOption, setSortOption]       = useState("priority_score");
+  return (
+    <Suspense fallback={<div className="space-y-3 p-4"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>}>
+      <AdminLeadsInner />
+    </Suspense>
+  );
+}
+
+function AdminLeadsInner() {
+  const searchParams = useSearchParams();
+
+  // filters — initialise from URL query params so dashboard links work
+  const [status, setStatus]               = useState(() => searchParams.get("status") ?? "");
+  const [niche, setNiche]                 = useState(() => searchParams.get("niche") ?? "");
+  const [selectedCategory, setSelectedCategory] = useState(() => searchParams.get("niche") ?? "");
+  const [employee, setEmployee]           = useState(() => searchParams.get("assignedTo") ?? "");
+  const [leadQuality, setLeadQuality]     = useState(() => searchParams.get("leadQuality") ?? "");
+  const [websiteStatus, setWebsiteStatus] = useState(() => searchParams.get("websiteStatus") ?? "");
+  const [city, setCity]                   = useState(() => searchParams.get("city") ?? "");
+  const [search, setSearch]               = useState(() => searchParams.get("search") ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("search") ?? "");
+  const [fromDate, setFromDate]           = useState(() => searchParams.get("from") ?? "");
+  const [toDate, setToDate]               = useState(() => searchParams.get("to") ?? "");
+  const [filtersOpen, setFiltersOpen]     = useState(() => searchParams.get("status") !== null && searchParams.get("status") !== "");
+  const [tierFilter, setTierFilter]       = useState(() => searchParams.get("tier") ?? "");
+  const [sortOption, setSortOption]       = useState(() => searchParams.get("sort") ?? "priority_score");
 
   // pagination — resets on any filter change
   const [page, setPage] = useState(1);

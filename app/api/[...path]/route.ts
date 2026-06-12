@@ -740,9 +740,9 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     if (!payload) return unauthorized();
 
     // Broad category map — sub-categories → parent category
-    // Key: lowercase sub-category string, Value: broad parent label
+    // Key: lowercase sub-category string (exact match), Value: broad parent label
     const CATEGORY_MAP: Record<string, string> = {
-      // Salon & Beauty
+      // Salon & Beauty — exact + Google Maps variants
       "salon": "Salon & Beauty",
       "hair salon": "Salon & Beauty",
       "beauty salon": "Salon & Beauty",
@@ -762,20 +762,67 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       "fencing salon": "Salon & Beauty",
       "threading": "Salon & Beauty",
       "eyebrow threading": "Salon & Beauty",
+      "beauty spa": "Salon & Beauty",
+      "cosmetologist": "Salon & Beauty",
+      "skin care clinic": "Salon & Beauty",
+      "waxing hair removal service": "Salon & Beauty",
+      "nail technician": "Salon & Beauty",
+      "tattoo shop": "Salon & Beauty",
+      "massage therapist": "Salon & Beauty",
+      "massage spa": "Salon & Beauty",
+      "laser hair removal service": "Salon & Beauty",
+
+      // Real Estate — exact + all Google Maps variants
+      "real estate": "Real Estate",
+      "real estate agency": "Real Estate",
+      "real estate agent": "Real Estate",
+      "real estate consultant": "Real Estate",
+      "real estate developer": "Real Estate",
+      "real estate rental agency": "Real Estate",
+      "commercial real estate agency": "Real Estate",
+      "commercial real estate inspector": "Real Estate",
+      "industrial real estate agency": "Real Estate",
+      "office space rental agency": "Real Estate",
+      "housing society": "Real Estate",
+      "property": "Real Estate",
+      "property dealer": "Real Estate",
+      "property developer": "Real Estate",
+      "property investment company": "Real Estate",
+      "property management company": "Real Estate",
+      "property administrator": "Real Estate",
+      "builder": "Real Estate",
+      "construction company": "Real Estate",
+      "construction": "Real Estate",
+      "interior design": "Real Estate",
+      "interior designer": "Real Estate",
+      "architect": "Real Estate",
+      "home decor": "Real Estate",
+      "furniture": "Real Estate",
+      "home builder": "Real Estate",
+      "land surveyor": "Real Estate",
+      "mortgage broker": "Real Estate",
+      "title company": "Real Estate",
 
       // Restaurant & Food
       "restaurant": "Restaurant & Food",
       "cafe": "Restaurant & Food",
       "food": "Restaurant & Food",
       "dhaba": "Restaurant & Food",
+      "fast food restaurant": "Restaurant & Food",
       "fast food": "Restaurant & Food",
       "bakery": "Restaurant & Food",
       "sweet shop": "Restaurant & Food",
       "catering": "Restaurant & Food",
+      "pizza restaurant": "Restaurant & Food",
       "pizza": "Restaurant & Food",
       "chinese restaurant": "Restaurant & Food",
       "north indian restaurant": "Restaurant & Food",
       "south indian restaurant": "Restaurant & Food",
+      "ice cream shop": "Restaurant & Food",
+      "juice shop": "Restaurant & Food",
+      "tea house": "Restaurant & Food",
+      "coffee shop": "Restaurant & Food",
+      "food court": "Restaurant & Food",
 
       // Health & Medical
       "clinic": "Health & Medical",
@@ -791,9 +838,16 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       "eye hospital": "Health & Medical",
       "skin care": "Health & Medical",
       "dermatologist": "Health & Medical",
+      "medical center": "Health & Medical",
+      "nursing home": "Health & Medical",
+      "diagnostic center": "Health & Medical",
+      "pathology lab": "Health & Medical",
+      "veterinarian": "Health & Medical",
 
       // Fitness & Gym
       "gym": "Fitness & Gym",
+      "fitness center": "Fitness & Gym",
+      "fitness club": "Fitness & Gym",
       "fitness": "Fitness & Gym",
       "yoga": "Fitness & Gym",
       "yoga studio": "Fitness & Gym",
@@ -802,11 +856,14 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       "personal trainer": "Fitness & Gym",
       "sports": "Fitness & Gym",
       "swimming pool": "Fitness & Gym",
+      "martial arts school": "Fitness & Gym",
+      "zumba": "Fitness & Gym",
 
       // Education & Coaching
       "school": "Education & Coaching",
       "coaching": "Education & Coaching",
       "tutor": "Education & Coaching",
+      "tutoring service": "Education & Coaching",
       "tutoring": "Education & Coaching",
       "coaching center": "Education & Coaching",
       "coaching centre": "Education & Coaching",
@@ -817,17 +874,8 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       "dance school": "Education & Coaching",
       "music school": "Education & Coaching",
       "art school": "Education & Coaching",
-
-      // Real Estate
-      "real estate": "Real Estate",
-      "property": "Real Estate",
-      "builder": "Real Estate",
-      "construction": "Real Estate",
-      "interior design": "Real Estate",
-      "interior designer": "Real Estate",
-      "architect": "Real Estate",
-      "home decor": "Real Estate",
-      "furniture": "Real Estate",
+      "preschool": "Education & Coaching",
+      "play school": "Education & Coaching",
 
       // Hotel & Travel
       "hotel": "Hotel & Travel",
@@ -839,43 +887,112 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       "hostel": "Hotel & Travel",
       "tours": "Hotel & Travel",
       "tour operator": "Hotel & Travel",
+      "motel": "Hotel & Travel",
+      "bed & breakfast": "Hotel & Travel",
 
-      // E-commerce & Retail
+      // Retail & E-commerce
       "shop": "Retail & E-commerce",
       "store": "Retail & E-commerce",
+      "clothing store": "Retail & E-commerce",
       "clothing": "Retail & E-commerce",
       "boutique": "Retail & E-commerce",
       "fashion": "Retail & E-commerce",
+      "electronics store": "Retail & E-commerce",
       "electronics": "Retail & E-commerce",
       "mobile shop": "Retail & E-commerce",
       "jewellery": "Retail & E-commerce",
+      "jewelry store": "Retail & E-commerce",
       "jewelry": "Retail & E-commerce",
       "footwear": "Retail & E-commerce",
       "hardware store": "Retail & E-commerce",
+      "grocery store": "Retail & E-commerce",
       "grocery": "Retail & E-commerce",
+      "supermarket": "Retail & E-commerce",
+      "gift shop": "Retail & E-commerce",
+      "stationery store": "Retail & E-commerce",
 
       // Legal & Finance
       "lawyer": "Legal & Finance",
+      "law firm": "Legal & Finance",
       "advocate": "Legal & Finance",
       "ca": "Legal & Finance",
       "chartered accountant": "Legal & Finance",
       "finance": "Legal & Finance",
+      "insurance agency": "Legal & Finance",
       "insurance": "Legal & Finance",
+      "investment company": "Legal & Finance",
       "investment": "Legal & Finance",
       "tax consultant": "Legal & Finance",
+      "accounting firm": "Legal & Finance",
       "accounting": "Legal & Finance",
+      "financial planner": "Legal & Finance",
 
       // Automotive
-      "car": "Automotive",
-      "auto": "Automotive",
+      "car dealer": "Automotive",
+      "car dealership": "Automotive",
       "car repair": "Automotive",
       "car wash": "Automotive",
+      "car": "Automotive",
+      "auto repair shop": "Automotive",
+      "auto": "Automotive",
       "garage": "Automotive",
       "bike shop": "Automotive",
       "tyre shop": "Automotive",
       "automobile": "Automotive",
       "driving school": "Automotive",
+      "used car dealer": "Automotive",
+      "motorcycle dealer": "Automotive",
     };
+
+    // Keyword-based fallback rules — checked when exact match fails
+    // Order matters: first match wins
+    const KEYWORD_RULES: Array<[string, string]> = [
+      ["real estate", "Real Estate"],
+      ["property", "Real Estate"],
+      ["housing", "Real Estate"],
+      ["construction", "Real Estate"],
+      ["builder", "Real Estate"],
+      ["salon", "Salon & Beauty"],
+      ["beauty", "Salon & Beauty"],
+      ["parlour", "Salon & Beauty"],
+      ["parlor", "Salon & Beauty"],
+      ["spa", "Salon & Beauty"],
+      ["hair", "Salon & Beauty"],
+      ["nail", "Salon & Beauty"],
+      ["barber", "Salon & Beauty"],
+      ["massage", "Salon & Beauty"],
+      ["restaurant", "Restaurant & Food"],
+      ["food", "Restaurant & Food"],
+      ["cafe", "Restaurant & Food"],
+      ["bakery", "Restaurant & Food"],
+      ["hotel", "Hotel & Travel"],
+      ["travel", "Hotel & Travel"],
+      ["resort", "Hotel & Travel"],
+      ["hospital", "Health & Medical"],
+      ["clinic", "Health & Medical"],
+      ["medical", "Health & Medical"],
+      ["doctor", "Health & Medical"],
+      ["dental", "Health & Medical"],
+      ["pharmacy", "Health & Medical"],
+      ["gym", "Fitness & Gym"],
+      ["fitness", "Fitness & Gym"],
+      ["yoga", "Fitness & Gym"],
+      ["school", "Education & Coaching"],
+      ["coaching", "Education & Coaching"],
+      ["institute", "Education & Coaching"],
+      ["college", "Education & Coaching"],
+      ["university", "Education & Coaching"],
+      ["shop", "Retail & E-commerce"],
+      ["store", "Retail & E-commerce"],
+      ["boutique", "Retail & E-commerce"],
+      ["lawyer", "Legal & Finance"],
+      ["finance", "Legal & Finance"],
+      ["insurance", "Legal & Finance"],
+      ["accounting", "Legal & Finance"],
+      ["car", "Automotive"],
+      ["auto", "Automotive"],
+      ["garage", "Automotive"],
+    ];
 
     // Fetch all raw niche/category values from DB
     const [nicheGroups, categoryGroups] = await Promise.all([
@@ -900,11 +1017,24 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     const broadSet = new Set<string>();
     for (const raw of rawValues) {
       const lower = raw.toLowerCase().trim();
-      const mapped = CATEGORY_MAP[lower];
-      if (mapped) {
-        broadSet.add(mapped);
+      // 1. Exact match
+      const exactMatch = CATEGORY_MAP[lower];
+      if (exactMatch) {
+        broadSet.add(exactMatch);
+        continue;
+      }
+      // 2. Keyword contains match
+      let keywordMatch: string | undefined;
+      for (const [keyword, broad] of KEYWORD_RULES) {
+        if (lower.includes(keyword)) {
+          keywordMatch = broad;
+          break;
+        }
+      }
+      if (keywordMatch) {
+        broadSet.add(keywordMatch);
       } else {
-        // Capitalize first letter of unmapped values
+        // 3. Fallback: capitalize first letter of raw value
         broadSet.add(raw.charAt(0).toUpperCase() + raw.slice(1));
       }
     }
@@ -914,7 +1044,19 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     const rawToBroad: Record<string, string> = {};
     for (const raw of rawValues) {
       const lower = raw.toLowerCase().trim();
-      rawToBroad[raw] = CATEGORY_MAP[lower] ?? (raw.charAt(0).toUpperCase() + raw.slice(1));
+      const exactMatch = CATEGORY_MAP[lower];
+      if (exactMatch) {
+        rawToBroad[raw] = exactMatch;
+        continue;
+      }
+      let keywordMatch: string | undefined;
+      for (const [keyword, broad] of KEYWORD_RULES) {
+        if (lower.includes(keyword)) {
+          keywordMatch = broad;
+          break;
+        }
+      }
+      rawToBroad[raw] = keywordMatch ?? (raw.charAt(0).toUpperCase() + raw.slice(1));
     }
 
     return ok({ categories, rawToBroad });
