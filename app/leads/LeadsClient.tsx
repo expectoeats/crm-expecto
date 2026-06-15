@@ -303,7 +303,7 @@ export default function LeadsClient({
         {isLoading ? (
           <div className="space-y-3"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
         ) : currentLeads.length ? (
-          <div className="space-y-3">
+          <div className="space-y-3 grid lg:grid-cols-2 md:grid-cols-2 sm:grid-cols-1 gap-3" >
             {currentLeads.map((lead) => (
               <LeadCard
                 key={lead._id}

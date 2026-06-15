@@ -215,9 +215,9 @@ export function LeadCard({
         </div>
 
         {/* SECOND ROW — compact info */}
-        <div className="mt-1 flex items-center gap-2 px-4 text-xs text-slate-500">
+        <div className="mt-4 flex items-center gap-2 px-4 text-xs text-slate-500">
           {lead.rating != null ? (
-            <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600">
+            <span className="flex items-center gap-1 font-semibold text-amber-600">
               <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
               {lead.rating}
               {lead.reviewCount != null ? ` (${lead.reviewCount})` : ""}
@@ -225,7 +225,6 @@ export function LeadCard({
           ) : null}
           {lead.rating != null && lead.city ? <span>·</span> : null}
           {lead.city ? <span>{lead.city}</span> : null}
-          {lead.niche ? <span>· {lead.niche}</span> : null}
         </div>
 
         {/* THIRD ROW — contact status */}
