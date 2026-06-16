@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
-import { Calendar, CheckCircle, Circle, Clock, Eye, Flame, MessageCircle, Phone, PhoneCall, RefreshCw, Send, Star, ThumbsDown, X, Zap } from "lucide-react";
+import { Calendar, CheckCircle, Circle, Clock, Eye, Flame, MessageCircle, Pencil, Phone, PhoneCall, RefreshCw, Send, Star, ThumbsDown, X, Zap } from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@/components/ui";
+import { Badge as _Badge } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, TierBadge } from "@/components/badges";
 import { formatReadableDate, formatReadableDateTime } from "@/lib/time";
 import { apiFetch } from "@/lib/http";
@@ -69,6 +69,9 @@ export type LeadRecord = {
   followUpNote?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Future CRM upsell
+  future_crm_opportunity?: boolean;
+  crm_lead_score?: number;
 };
 
 /** Fire contact-action API */
@@ -133,11 +136,55 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 function StatusBadgeNew({ status }: { status: string }) {
   const cfg  = statusConfig[status];
   const icon = STATUS_ICONS[status];
-  if (!cfg) return null;
+  if (!cfg) {
+    // Custom / unknown status — show as a neutral violet badge
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ring-violet-200 text-violet-700">
+        <Pencil className="h-3 w-3" />
+        {status}
+      </span>
+    );
+  }
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", cfg.className)}>
       {icon}
       {cfg.label}
+    </span>
+  );
+}
+
+/**
+ * Purple badge shown on lead cards when future_crm_opportunity is true.
+ * Hovering/clicking reveals a tooltip explaining the upsell context.
+ */
+function CrmUpsellBadge({ score }: { score?: number | null }) {
+  const [open, setOpen] = useState(false);
+  const label = score != null ? `🔗 Future CRM Upsell (Score: ${score})` : "🔗 Future CRM Upsell";
+
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        aria-label="Future CRM Upsell opportunity details"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700 ring-1 ring-inset ring-violet-300 transition hover:bg-violet-200"
+      >
+        {label}
+      </button>
+      {open ? (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 w-64 rounded-xl bg-violet-900 px-3 py-2.5 text-[11px] leading-relaxed text-white shadow-xl"
+        >
+          This business also qualifies as a strong CRM product buyer. Recommended: deliver their website first, then pitch the CRM 30–60 days after launch.
+          <span className="absolute left-4 top-full h-0 w-0 border-x-4 border-t-4 border-x-transparent border-t-violet-900" />
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -169,8 +216,6 @@ export function LeadCard({
     const userId = currentUser?.id ?? "";
     const result = await markContacted(lead._id, via, userName, userId);
     await refreshLeadLists();
-
-    // Show quick note toast after 3 seconds
     toastTimer.current = setTimeout(() => {
       setToast({ via, historyEntryId: result.history_entry_id });
     }, 3000);
@@ -178,7 +223,6 @@ export function LeadCard({
 
   const whatsappUrl = getWhatsAppUrl(lead);
   const isContacted = lead.status !== "new";
-  const lastContact = lead.contact_history?.[lead.contact_history.length - 1];
   const lastContactTime = lead.last_contacted_at;
   const pitchLines = (lead.pitchMessage ?? "").split("\n");
   const pitchPreview = pitchLines.slice(0, 2).join("\n");
@@ -193,106 +237,125 @@ export function LeadCard({
         "overflow-hidden rounded-2xl bg-white ring-1 transition-all",
         isContacted ? "ring-slate-200" : "ring-slate-200 shadow-sm hover:shadow-md"
       )}>
-        {/* TOP ROW */}
-        <div className="flex items-start gap-2 px-4 pt-4">
-          <div className="min-w-0 flex-1">
+
+        {/* ── HEADER ── */}
+        <div className="px-4 pt-4 pb-3">
+          {/* Row 1: Name + assigned avatar */}
+          <div className="flex items-start justify-between gap-2">
             <button
               type="button"
               onClick={() => onViewDetails?.(lead._id)}
-              className="text-left"
+              className="min-w-0 flex-1 text-left"
             >
-              <span className="text-base font-bold text-slate-950 hover:text-slate-700">{lead.name}</span>
+              <h3 className="truncate text-[15px] font-bold leading-tight text-slate-950 hover:text-slate-700">
+                {lead.name}
+              </h3>
             </button>
+            {assignedName ? (
+              <div
+                className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600"
+                title={assignedName}
+              >
+                {getInitials(assignedName)}
+              </div>
+            ) : null}
           </div>
-          <NicheBadge niche={lead.niche} />
-          <TierBadge tier={lead.tier} label={lead.tierLabel} />
-          {/* Assign initials */}
-          {assignedName ? (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600" title={assignedName}>
-              {getInitials(assignedName)}
-            </div>
-          ) : null}
-        </div>
 
-        {/* SECOND ROW — compact info */}
-        <div className="mt-4 flex items-center gap-2 px-4 text-xs text-slate-500">
-          {lead.rating != null ? (
-            <span className="flex items-center gap-1 font-semibold text-amber-600">
-              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-              {lead.rating}
-              {lead.reviewCount != null ? ` (${lead.reviewCount})` : ""}
-            </span>
-          ) : null}
-          {lead.rating != null && lead.city ? <span>·</span> : null}
-          {lead.city ? <span>{lead.city}</span> : null}
-        </div>
+          {/* Row 2: Rating + city + owner — single compact line */}
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 min-w-0">
+            {lead.rating != null ? (
+              <span className="flex shrink-0 items-center gap-0.5 font-semibold text-amber-600">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                {lead.rating}
+                {lead.reviewCount != null ? (
+                  <span className="font-normal text-slate-400"> ({lead.reviewCount})</span>
+                ) : null}
+              </span>
+            ) : null}
+            {lead.rating != null && (lead.city || lead.ownerName) ? (
+              <span className="text-slate-300">·</span>
+            ) : null}
+            {lead.city ? (
+              <span className="truncate">{lead.city}</span>
+            ) : null}
+            {lead.city && lead.ownerName ? (
+              <span className="text-slate-300">·</span>
+            ) : null}
+            {lead.ownerName ? (
+              <span className="truncate text-slate-400">{lead.ownerName}</span>
+            ) : null}
+          </div>
 
-        {/* THIRD ROW — contact status */}
-        <div className="mt-2 px-4">
-          {lastContactTime ? (
-            <p className={cn(
-              "inline-flex items-center gap-1.5 text-xs font-semibold",
-              lead.last_action === "whatsapped" ? "text-[#1a9e4a]" : "text-blue-600"
-            )}>
-              {lead.last_action === "whatsapped"
-                ? <MessageCircle className="h-3.5 w-3.5" />
-                : <PhoneCall className="h-3.5 w-3.5" />}
-              {lead.last_action === "whatsapped" ? "WhatsApped" : "Called"} by {lead.last_contacted_by} · {relativeTime(lastContactTime)}
-            </p>
-          ) : (
-            <p className="inline-flex items-center gap-1 text-xs text-slate-400">
-              <span className="h-2 w-2 rounded-full bg-slate-300" />
-              Never contacted
-            </p>
-          )}
-        </div>
+          {/* Row 3: Badges — niche · tier · quality · status */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <NicheBadge niche={lead.niche} />
+            <TierBadge tier={lead.tier} label={lead.tierLabel} />
+            <LeadQualityBadge quality={lead.leadQuality} />
+            <StatusBadgeNew status={lead.status} />
+            {lead.future_crm_opportunity ? (
+              <CrmUpsellBadge score={lead.crm_lead_score} />
+            ) : null}
+          </div>
 
-        {/* FOURTH ROW — status badges */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 px-4">
-          <LeadQualityBadge quality={lead.leadQuality} />
-          <StatusBadgeNew status={lead.status} />
-          {lead.followUpDate ? (
-            <Badge className="bg-purple-50 text-purple-700 ring-purple-200">
-              <Clock className="mr-1 h-3 w-3" />
-              {formatReadableDate(lead.followUpDate)}
-            </Badge>
-          ) : null}
-        </div>
-
-        {/* PITCH — collapsed by default */}
-        {lead.pitchMessage ? (
-          <div className="mt-3 px-4">
-            <div className="rounded-xl bg-blue-50 px-3 py-2.5 ring-1 ring-blue-100">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-600">Pitch</p>
-              <p className="mt-1 text-xs leading-relaxed text-blue-900 whitespace-pre-line">
-                {pitchExpanded ? lead.pitchMessage : pitchPreview}
+          {/* Row 4: Last contact OR follow-up date */}
+          <div className="mt-2.5 flex items-center justify-between gap-2">
+            {lastContactTime ? (
+              <p className={cn(
+                "inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold",
+                lead.last_action === "whatsapped" ? "text-[#1a9e4a]" : "text-blue-600"
+              )}>
+                {lead.last_action === "whatsapped"
+                  ? <MessageCircle className="h-3 w-3 shrink-0" />
+                  : <PhoneCall className="h-3 w-3 shrink-0" />}
+                <span className="truncate">
+                  {lead.last_action === "whatsapped" ? "WA" : "Called"}&nbsp;·&nbsp;{lead.last_contacted_by}&nbsp;·&nbsp;{relativeTime(lastContactTime)}
+                </span>
               </p>
-              {hasPitchMore ? (
-                <button
-                  type="button"
-                  onClick={() => setPitchExpanded((v) => !v)}
-                  className="mt-1 text-[11px] font-semibold text-blue-600 hover:underline"
-                >
-                  {pitchExpanded ? "Show less ↑" : "Show more ↓"}
-                </button>
-              ) : null}
-            </div>
+            ) : (
+              <p className="inline-flex items-center gap-1 text-xs text-slate-400">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-slate-300" />
+                Never contacted
+              </p>
+            )}
+            {lead.followUpDate ? (
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 ring-1 ring-inset ring-purple-200">
+                <Clock className="h-2.5 w-2.5" />
+                {formatReadableDate(lead.followUpDate)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* ── PITCH / HOOK ── */}
+        {lead.pitchMessage ? (
+          <div className="mx-4 mb-3 rounded-xl bg-blue-50 px-3 py-2.5 ring-1 ring-blue-100">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1">Pitch</p>
+            <p className="text-xs leading-relaxed text-blue-900 whitespace-pre-line">
+              {pitchExpanded ? lead.pitchMessage : pitchPreview}
+            </p>
+            {hasPitchMore ? (
+              <button
+                type="button"
+                onClick={() => setPitchExpanded((v) => !v)}
+                className="mt-1.5 text-[11px] font-semibold text-blue-600 hover:underline"
+              >
+                {pitchExpanded ? "Show less ↑" : "Show more ↓"}
+              </button>
+            ) : null}
           </div>
         ) : lead.strongHook ? (
-          <div className="mt-3 px-4">
-            <div className="rounded-xl bg-amber-50 px-3 py-2.5 ring-1 ring-amber-100">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600">Why call?</p>
-              <p className="mt-1 line-clamp-2 text-xs text-amber-900">{lead.strongHook}</p>
-            </div>
+          <div className="mx-4 mb-3 rounded-xl bg-amber-50 px-3 py-2.5 ring-1 ring-amber-100">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-amber-500 mb-1">Why call?</p>
+            <p className="line-clamp-2 text-xs text-amber-900">{lead.strongHook}</p>
           </div>
         ) : null}
 
-        {/* BUTTONS */}
-        <div className="mt-3 grid grid-cols-3 gap-2 px-4 pb-4">
+        {/* ── ACTION BUTTONS ── */}
+        <div className="grid grid-cols-3 gap-2 px-4 pb-4">
           <a
             href={`tel:${lead.phone}`}
             onClick={() => handleContact("call")}
-            className="inline-flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-sm font-semibold text-white transition active:scale-[0.97] hover:bg-emerald-600"
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-sm font-semibold text-white transition active:scale-[0.97] hover:bg-emerald-600"
           >
             <PhoneCall className="h-4 w-4" />
             Call
@@ -302,7 +365,7 @@ export function LeadCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => handleContact("whatsapp")}
-            className="inline-flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl bg-[#25D366] text-sm font-semibold text-white transition active:scale-[0.97] hover:bg-[#1fba58]"
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[#25D366] text-sm font-semibold text-white transition active:scale-[0.97] hover:bg-[#1fba58]"
           >
             <MessageCircle className="h-4 w-4" />
             WA
@@ -311,7 +374,7 @@ export function LeadCard({
             <button
               type="button"
               onClick={() => onViewDetails(lead._id)}
-              className="inline-flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-sm font-semibold text-slate-700 transition active:scale-[0.97] hover:bg-slate-200"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-sm font-semibold text-slate-700 transition active:scale-[0.97] hover:bg-slate-200"
             >
               <Eye className="h-4 w-4" />
               View
@@ -319,7 +382,7 @@ export function LeadCard({
           ) : (
             <Link
               href={`/leads/${lead._id}`}
-              className="inline-flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-sm font-semibold text-slate-700"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-sm font-semibold text-slate-700"
             >
               <Eye className="h-4 w-4" />
               View
@@ -327,10 +390,11 @@ export function LeadCard({
           )}
         </div>
 
-        {/* Footer hint */}
+        {/* ── FOOTER HINT ── */}
         {showActions && !isContacted ? (
           <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[11px] text-slate-400">
-            Tap <span className="font-semibold text-emerald-600">Call</span> or <span className="font-semibold text-[#25D366]">WA</span> → moves to history automatically
+            Tap <span className="font-semibold text-emerald-600">Call</span> or{" "}
+            <span className="font-semibold text-[#25D366]">WA</span> → moves to history automatically
           </div>
         ) : null}
       </div>

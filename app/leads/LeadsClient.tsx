@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import {
-  Bell, CheckCircle2, Clock, Filter, Inbox, Search, Sparkles, TrendingUp,
+  Bell, CheckCircle2, Clock, Filter, Inbox, Search, Sparkles, TrendingUp, Globe, ShoppingCart,
 } from "lucide-react";
 import { EmployeeShell } from "@/components/employee-shell";
 import { EmptyState, Input, SkeletonCard } from "@/components/ui";
 import { LeadCard, type LeadRecord } from "@/components/lead-utils";
 import { LeadDrawer } from "@/components/lead-drawer";
+import { CrmLeadsTab } from "@/components/crm-leads-tab";
 import { apiFetch } from "@/lib/http";
 import { ACTIVE_STATUSES, CONTACTED_STATUSES } from "@/lib/ui";
 
@@ -29,6 +30,7 @@ function startOfIstDate(value: Date) {
 type Tab = "active" | "contacted";
 type TierFilter = "all" | "hot" | "warm" | "cold";
 type SortOption = "priority_score" | "rating" | "review_count" | "newest";
+type Pipeline = "website" | "crm";
 
 export default function LeadsClient({
   initialStatus = "",
@@ -38,6 +40,7 @@ export default function LeadsClient({
   initialFollowupOnly?: boolean;
 }) {
   const router = useRouter();
+  const [pipeline, setPipeline] = useState<Pipeline>("website");
   const [tab, setTab] = useState<Tab>("active");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -145,6 +148,38 @@ export default function LeadsClient({
   return (
     <EmployeeShell followUpCount={followUpsToday}>
       <div className="space-y-4">
+
+        {/* PIPELINE SWITCHER */}
+        <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setPipeline("website")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+              pipeline === "website" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Globe className="h-4 w-4" />
+            Website Leads
+          </button>
+          <button
+            type="button"
+            onClick={() => setPipeline("crm")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+              pipeline === "crm" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            CRM Leads
+          </button>
+        </div>
+
+        {/* CRM PIPELINE */}
+        {pipeline === "crm" ? (
+          <CrmLeadsTab />
+        ) : (
+
+        /* WEBSITE PIPELINE — existing UI below */
+        <div className="space-y-4">
 
         {/* STATS BAR */}
         {stats ? (
@@ -327,9 +362,10 @@ export default function LeadsClient({
         ) : (
           <EmptyState title="No contacted leads yet" description="Call or WhatsApp a lead to see history here." />
         )}
-      </div>
+        </div> {/* end website pipeline space-y-4 */}
+        )} {/* end pipeline === "crm" ? ... : ... */}
 
-      {/* Lead drawer */}
+      {/* Lead drawer — shown for website pipeline only */}
       <LeadDrawer
         leadId={drawerLeadId}
         onClose={() => setDrawerLeadId(null)}

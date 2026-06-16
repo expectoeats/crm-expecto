@@ -90,6 +90,10 @@ const leadSchema = new Schema(
 
     followUpDate: { type: Date, default: null },
     followUpNote: { type: String, trim: true, default: "" },
+
+    // Future CRM upsell — set by the CRM Buyer scraper when the lead has no website
+    future_crm_opportunity: { type: Boolean, default: false },
+    crm_lead_score:         { type: Number, default: null },
   },
   {
     timestamps: true,

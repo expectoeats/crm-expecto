@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isValidObjectId } from "mongoose";
 import { connectDatabase } from "@/lib/db";
-import { Lead, User } from "@/models";
+import { Lead, User, CrmBuyerLead } from "@/models";
 import { authCookieOptions, cookieName, signAuthToken, verifyAuthToken } from "@/lib/auth";
 import { getIstDayRange } from "@/lib/time";
 
@@ -448,6 +448,35 @@ async function handleAuth(request: NextRequest, segments: string[]) {
   return notFound("Auth route not found");
 }
 
+/**
+ * Cross-pipeline unlock: when a website lead (future_crm_opportunity=true) is closed/won,
+ * find the linked CRM buyer lead via reverse lookup on linked_website_lead_id,
+ * change its status from "blocked_needs_website" to "new", set a 30-day follow-up,
+ * and append an auto_unlocked entry to its contact_history.
+ */
+async function unlockCrmBuyerLead(websiteLeadId: string) {
+  const followUpDate = new Date();
+  followUpDate.setDate(followUpDate.getDate() + 30);
+
+  await CrmBuyerLead.findOneAndUpdate(
+    {
+      linked_website_lead_id: websiteLeadId,
+      status: "blocked_needs_website",
+    },
+    {
+      status: "new",
+      followUpDate,
+      $push: {
+        contact_history: {
+          action: "auto_unlocked",
+          note: "Website deal closed — CRM pitch now eligible",
+          at: new Date(),
+        },
+      },
+    }
+  );
+}
+
 async function handleLeadDetailAction(
   request: NextRequest,
   leadId: string,
@@ -528,6 +557,16 @@ async function handleLeadDetailAction(
     if (!body.status) return fail("Status is required", 400);
 
     const updatedLead = await Lead.findByIdAndUpdate(leadId, { status: body.status }, { new: true });
+
+    // Cross-pipeline unlock: when a website lead with future_crm_opportunity is closed,
+    // unblock the linked CRM buyer lead so it becomes eligible for the CRM pitch.
+    const newStatus = body.status.toLowerCase();
+    const isClosed = newStatus === "closed" || newStatus === "converted" || newStatus === "closed_won";
+    const leadDoc = updatedLead?.toObject() as Record<string, unknown> | undefined;
+    if (isClosed && leadDoc && leadDoc.future_crm_opportunity === true) {
+      await unlockCrmBuyerLead(leadId);
+    }
+
     return ok({ lead: updatedLead });
   }
 
@@ -1456,6 +1495,92 @@ async function handleStats(request: NextRequest) {
   });
 }
 
+async function handleCrmLeads(request: NextRequest, segments: string[]) {
+  const [first, second] = segments;
+
+  // GET /crm-leads — list (admin sees all, employee sees assigned)
+  // GET /crm-leads?status=blocked_needs_website — filter by status
+  if (!first) {
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    const status  = request.nextUrl.searchParams.get("status") ?? "";
+    const search  = request.nextUrl.searchParams.get("search") ?? "";
+    const page    = Math.max(Number(request.nextUrl.searchParams.get("page") ?? 1), 1);
+    const limit   = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") ?? 20), 1), 100);
+    const skip    = (page - 1) * limit;
+
+    const filter: Record<string, unknown> = {};
+    if (payload.role !== "admin") filter.assignedTo = payload.id;
+    if (status) filter.status = status;
+    if (search) {
+      filter.$or = [
+        { name: new RegExp(search, "i") },
+        { business_name: new RegExp(search, "i") },
+        { phone: new RegExp(search, "i") },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      CrmBuyerLead.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate("linked_website_lead_id", "name _id"),
+      CrmBuyerLead.countDocuments(filter),
+    ]);
+
+    return ok({
+      leads: items.map((d) => d.toObject()),
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    });
+  }
+
+  // PATCH /crm-leads/:id/status
+  if (second === "status") {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    if (!isValidObjectId(first)) return fail("Invalid lead id", 400);
+    const body = (await parseJson<{ status?: string }>(request)) ?? {};
+    if (!body.status) return fail("Status is required", 400);
+
+    const updated = await CrmBuyerLead.findByIdAndUpdate(first, { status: body.status }, { new: true });
+    if (!updated) return notFound("CRM lead not found");
+    return ok({ lead: updated.toObject() });
+  }
+
+  // PATCH /crm-leads/:id/assign
+  if (second === "assign") {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    if (!isValidObjectId(first)) return fail("Invalid lead id", 400);
+    const body = (await parseJson<{ assignedTo?: string | null }>(request)) ?? {};
+
+    const updated = await CrmBuyerLead.findByIdAndUpdate(
+      first,
+      { assignedTo: body.assignedTo || null },
+      { new: true }
+    );
+    if (!updated) return notFound("CRM lead not found");
+    return ok({ lead: updated.toObject() });
+  }
+
+  // GET /crm-leads/:id — single lead
+  if (first && !second) {
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+    const payload = await requireAuth(request);
+    if (!payload) return unauthorized();
+
+    if (!isValidObjectId(first)) return fail("Invalid lead id", 400);
+    const lead = await CrmBuyerLead.findById(first).populate("linked_website_lead_id", "name _id");
+    if (!lead) return notFound("CRM lead not found");
+    return ok({ lead: lead.toObject() });
+  }
+
+  return notFound("CRM leads route not found");
+}
+
 async function handleRequest(request: NextRequest) {
   const segments = getSegments(request);
 
@@ -1470,6 +1595,7 @@ async function handleRequest(request: NextRequest) {
   try {
     if (section === "auth") return handleAuth(request, rest);
     if (section === "leads") return handleLeads(request, rest);
+    if (section === "crm-leads") return handleCrmLeads(request, rest);
     if (section === "users") return handleUsers(request, rest);
     if (section === "stats") return handleStats(request);
     return notFound("API route not found");

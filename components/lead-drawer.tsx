@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import {
   CalendarDays, Check, Copy, Edit2, ExternalLink, MessageCircle,
-  PhoneCall, Save, Star, X, MapPin, Globe, Hash,
+  Pencil, PhoneCall, Save, Star, X, MapPin, Globe, Hash,
 } from "lucide-react";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 import { NicheBadge, WebsiteStatusBadge } from "@/components/badges";
@@ -42,6 +42,8 @@ export function LeadDrawer({
   const [pitchText, setPitchText] = useState("");
   const [pitchCopied, setPitchCopied] = useState(false);
   const [status, setStatus] = useState("");
+  const [customStatusMode, setCustomStatusMode] = useState(false);
+  const [customStatusText, setCustomStatusText] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
   const [followUpDate, setFollowUpDate] = useState("");
   const [savingFollowUp, setSavingFollowUp] = useState(false);
@@ -56,6 +58,15 @@ export function LeadDrawer({
           ? new Date(lead.followUpDate).toISOString().slice(0, 10)
           : ""
       );
+      // If current status is not in the predefined list, switch to custom mode
+      const isKnown = ALL_STATUSES.some((s) => s.value === lead.status);
+      if (!isKnown && lead.status) {
+        setCustomStatusMode(true);
+        setCustomStatusText(lead.status);
+      } else {
+        setCustomStatusMode(false);
+        setCustomStatusText("");
+      }
     }
   }, [lead]);
 
@@ -77,11 +88,15 @@ export function LeadDrawer({
 
   async function saveStatus() {
     if (!lead) return;
+    const finalStatus = customStatusMode
+      ? customStatusText.trim()
+      : status;
+    if (!finalStatus) return;
     setSavingStatus(true);
     try {
       await apiFetch(`/leads/${lead._id}/status`, {
         method: "PATCH",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: finalStatus }),
       });
       await mutate();
       onUpdated?.();
@@ -370,18 +385,75 @@ export function LeadDrawer({
 
               {/* SECTION E — Status Changer */}
               <div className="space-y-3 p-5">
-                <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Change Status</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Change Status</p>
+                  {/* Toggle between preset and custom */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !customStatusMode;
+                      setCustomStatusMode(next);
+                      if (next) {
+                        // Pre-fill custom input with current label if it's a known status
+                        setCustomStatusText(cfg?.label ?? status ?? "");
+                      } else {
+                        // Revert dropdown to nearest known status or "new"
+                        const known = ALL_STATUSES.some((s) => s.value === lead?.status);
+                        setStatus(known ? (lead?.status ?? "new") : "new");
+                      }
+                    }}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ring-1",
+                      customStatusMode
+                        ? "bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100"
+                        : "bg-slate-100 text-slate-600 ring-slate-200 hover:bg-slate-200"
+                    )}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    {customStatusMode ? "Custom mode on" : "Custom"}
+                  </button>
+                </div>
+
+                {/* Current status pill */}
                 {cfg ? (
                   <div className={cn("flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ring-1", cfg.className)}>
                     {cfg.label}
                   </div>
+                ) : lead?.status ? (
+                  <div className="flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-sm font-semibold ring-1 ring-violet-200 text-violet-700">
+                    <Pencil className="h-3.5 w-3.5" />
+                    {lead.status}
+                  </div>
                 ) : null}
-                <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-                  {ALL_STATUSES.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </Select>
-                <Button onClick={saveStatus} disabled={savingStatus} className="w-full">
+
+                {customStatusMode ? (
+                  /* Custom text input */
+                  <div className="space-y-2">
+                    <Input
+                      value={customStatusText}
+                      onChange={(e) => setCustomStatusText(e.target.value)}
+                      placeholder="e.g. Meeting scheduled, Demo done…"
+                      maxLength={60}
+                      className="text-sm"
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      {customStatusText.length}/60 characters — anything you want to note
+                    </p>
+                  </div>
+                ) : (
+                  /* Predefined dropdown */
+                  <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+                    {ALL_STATUSES.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </Select>
+                )}
+
+                <Button
+                  onClick={saveStatus}
+                  disabled={savingStatus || (customStatusMode && !customStatusText.trim())}
+                  className="w-full"
+                >
                   {savingStatus ? "Saving..." : "Save Status"}
                 </Button>
               </div>

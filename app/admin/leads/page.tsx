@@ -5,12 +5,13 @@ import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import {
   ChevronDown, ChevronLeft, ChevronRight, Download, Filter,
-  MessageCircle, PhoneCall, Plus, Search, Shuffle, Star, TrendingUp, X,
+  MessageCircle, PhoneCall, Plus, Search, Shuffle, Star, TrendingUp, X, Globe, ShoppingCart,
 } from "lucide-react";
 import { Card, EmptyState, Input, Select, SectionTitle, Button, SkeletonCard } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, TierBadge } from "@/components/badges";
 import { type LeadRecord } from "@/components/lead-utils";
 import { LeadDrawer } from "@/components/lead-drawer";
+import { AdminCrmLeadsTab } from "@/components/admin-crm-leads-tab";
 import { apiFetch } from "@/lib/http";
 import { statusConfig, ALL_STATUSES } from "@/lib/ui";
 
@@ -109,6 +110,9 @@ export default function AdminLeadsPage() {
 function AdminLeadsInner() {
   const searchParams = useSearchParams();
 
+  // pipeline switcher
+  const [pipeline, setPipeline] = useState<"website" | "crm">("website");
+
   // filters — initialise from URL query params so dashboard links work
   const [status, setStatus]               = useState(() => searchParams.get("status") ?? "");
   const [niche, setNiche]                 = useState(() => searchParams.get("niche") ?? "");
@@ -197,6 +201,35 @@ function AdminLeadsInner() {
 
   return (
     <div className="space-y-4 pb-6">
+
+      {/* ── PIPELINE SWITCHER ── */}
+      <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
+        <button
+          type="button"
+          onClick={() => setPipeline("website")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+            pipeline === "website" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Globe className="h-4 w-4" />
+          Website / Portfolio
+        </button>
+        <button
+          type="button"
+          onClick={() => setPipeline("crm")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+            pipeline === "crm" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          CRM Leads
+        </button>
+      </div>
+
+      {/* ── CRM PIPELINE ── */}
+      {pipeline === "crm" ? (
+        <AdminCrmLeadsTab />
+      ) : (<>
 
       {/* ── PAGE HEADER ── */}
       <div className="flex items-center justify-between gap-3">
@@ -505,6 +538,7 @@ function AdminLeadsInner() {
         onClose={() => setDrawerLeadId(null)}
         onUpdated={() => mutate()}
       />
+      </>) /* end website pipeline */}
     </div>
   );
 }
