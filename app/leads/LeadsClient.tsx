@@ -290,17 +290,17 @@ export default function LeadsClient({
             </div>
           ) : null}
 
-          {/* Tabs — 3 tabs: Active, Contacted, Follow-ups */}
+          {/* Tabs — 3 tabs: Active, Follow-ups, Contacted */}
           <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
             <TabButton active={tab === "active"} onClick={() => setTab("active")}
-              icon={<RiSparklingLine className="h-4 w-4" />} label="Active"
+              icon={<RiSparklingLine className="h-3.5 w-3.5" />} label="Active"
               count={isLoading ? null : activeLeads.length} countColor="bg-emerald-500" />
             <TabButton active={tab === "followup"} onClick={() => setTab("followup")}
-              icon={<RiCalendarTodoLine className="h-4 w-4" />} label="Follow-ups"
+              icon={<RiCalendarTodoLine className="h-3.5 w-3.5" />} label="Follow-ups"
               count={isLoading ? null : followupLeads.length}
               countColor={followupLeads.length > 0 ? "bg-orange-500" : "bg-slate-400"} />
             <TabButton active={tab === "contacted"} onClick={() => setTab("contacted")}
-              icon={<RiCheckboxCircleLine className="h-4 w-4" />} label="Contacted"
+              icon={<RiCheckboxCircleLine className="h-3.5 w-3.5" />} label="Contacted"
               count={isLoading ? null : contactedLeads.length} countColor="bg-slate-400" />
           </div>
 
@@ -398,13 +398,14 @@ function TabButton({ active, onClick, icon, label, count, countColor }: {
 }) {
   return (
     <button type="button" onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+      className={`flex flex-1 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-semibold transition-all whitespace-nowrap ${
         active ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
       }`}
     >
-      {icon}{label}
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
       {count !== null ? (
-        <span className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white ${countColor}`}>
+        <span className={`shrink-0 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white ${countColor}`}>
           {count > 99 ? "99+" : count}
         </span>
       ) : null}
