@@ -11,6 +11,9 @@ import {
   RiSparklingLine,
   RiCloseLine,
   RiEqualizerLine,
+  RiShuffleLine,
+  RiBarChartLine,
+  RiEyeLine,
 } from "react-icons/ri";
 import { EmptyState, Input, SkeletonCard } from "@/components/ui";
 import { NicheBadge } from "@/components/badges";
@@ -71,6 +74,14 @@ function displayNiche(lead: CrmLead) {
 function getWhatsAppUrl(lead: CrmLead) {
   const number = (lead.whatsapp ?? lead.phone).replace(/\D/g, "");
   return `https://wa.me/${number}`;
+}
+
+// Score label based on crm_lead_score
+function scoreLabel(score?: number | null): { label: string; cls: string; accentCls: string } {
+  if (score == null) return { label: "—", cls: "bg-slate-100 text-slate-400 ring-slate-200", accentCls: "bg-slate-200" };
+  if (score >= 80) return { label: `${score} 🔥`, cls: "bg-red-100 text-red-700 ring-red-300", accentCls: "bg-red-400" };
+  if (score >= 60) return { label: `${score} ⚡`, cls: "bg-amber-100 text-amber-700 ring-amber-300", accentCls: "bg-amber-400" };
+  return { label: `${score}`, cls: "bg-violet-100 text-violet-700 ring-violet-300", accentCls: "bg-violet-400" };
 }
 
 // Cast CrmLead to a minimal LeadRecord shape for modal compatibility
@@ -141,6 +152,8 @@ function AdminCrmLeadCard({ lead, employees, onMutate }: {
       ? lead.linked_website_lead_id.name
       : null;
 
+  const score = scoreLabel(lead.crm_lead_score);
+
   function handleCallClick() {
     if (isBlocked) return;
     window.location.href = `tel:${lead.phone}`;
@@ -153,6 +166,11 @@ function AdminCrmLeadCard({ lead, employees, onMutate }: {
         "overflow-hidden rounded-2xl bg-white ring-1 shadow-sm",
         isBlocked ? "ring-amber-200" : "ring-slate-200"
       )}>
+        {/* Score accent bar */}
+        {!isBlocked && lead.crm_lead_score != null ? (
+          <div className={cn("h-1 w-full", score.accentCls)} />
+        ) : null}
+
         <div className="p-4 space-y-3">
 
           {/* Blocked banner */}
@@ -186,8 +204,9 @@ function AdminCrmLeadCard({ lead, employees, onMutate }: {
             </div>
             <NicheBadge niche={displayNiche(lead)} />
             {lead.crm_lead_score != null ? (
-              <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-bold text-violet-700 ring-1 ring-violet-300">
-                Score {lead.crm_lead_score}
+              <span className={cn("shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset", score.cls)}>
+                <RiBarChartLine className="h-3 w-3" />
+                Score {score.label}
               </span>
             ) : null}
           </div>
@@ -207,8 +226,8 @@ function AdminCrmLeadCard({ lead, employees, onMutate }: {
             )}
           </div>
 
-          {/* Action buttons */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Action buttons — 3 buttons: Call, WA, View */}
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={handleCallClick}
@@ -238,6 +257,19 @@ function AdminCrmLeadCard({ lead, employees, onMutate }: {
             >
               <RiWhatsappLine className="h-4 w-4" />
               WA
+            </a>
+            <a
+              href={linkedId ? `/leads/${linkedId}` : undefined}
+              className={cn(
+                "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition",
+                linkedId
+                  ? "bg-slate-100 text-slate-700 active:scale-[0.97] hover:bg-slate-200"
+                  : "bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed"
+              )}
+              tabIndex={linkedId ? 0 : -1}
+            >
+              <RiEyeLine className="h-4 w-4" />
+              View
             </a>
           </div>
         </div>
@@ -270,6 +302,7 @@ export function AdminCrmLeadsTab() {
   const [subTab, setSubTab] = useState<SubTab>("active");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [autoAssigning, setAutoAssigning] = useState(false);
 
   const statusFilter = subTab === "blocked" ? "blocked_needs_website" : "";
   const swrKey = `/crm-leads?status=${statusFilter}&search=${encodeURIComponent(debouncedSearch)}&limit=100`;
@@ -304,9 +337,28 @@ export function AdminCrmLeadsTab() {
     <div className="space-y-4">
 
       {/* Page header */}
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Manage</p>
-        <h1 className="text-xl font-bold text-slate-950">CRM Leads</h1>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Manage</p>
+          <h1 className="text-xl font-bold text-slate-950">CRM Leads</h1>
+        </div>
+        <button
+          type="button"
+          onClick={async () => {
+            setAutoAssigning(true);
+            try {
+              await apiFetch("/crm-leads/auto-assign", { method: "POST" });
+              await mutate();
+            } finally {
+              setAutoAssigning(false);
+            }
+          }}
+          disabled={autoAssigning}
+          className="inline-flex items-center gap-1.5 rounded-2xl bg-slate-950 px-3 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition disabled:opacity-50"
+        >
+          <RiShuffleLine className="h-4 w-4" />
+          {autoAssigning ? "Assigning…" : "Auto-Assign"}
+        </button>
       </div>
 
       {/* Sub-tabs */}

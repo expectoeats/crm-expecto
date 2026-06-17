@@ -224,8 +224,6 @@ function methodNotAllowed(_allow: string[] | string) {
 }
 
 function buildLeadFilter(searchParams: URLSearchParams) {
-  const filter: Record<string, unknown> = {};
-
   const status = searchParams.get("status");
   const niche = searchParams.get("niche");
   const assignedTo = searchParams.get("assignedTo");
@@ -237,55 +235,59 @@ function buildLeadFilter(searchParams: URLSearchParams) {
   const to = searchParams.get("to");
   const tier = searchParams.get("tier");
 
-  if (status) filter.status = status;
+  const andConditions: Record<string, unknown>[] = [];
+
+  if (status) andConditions.push({ status });
+
   if (niche) {
-    // Support comma-separated list of raw niche values (for broad category filtering)
     const nicheValues = niche.split(",").map((v) => v.trim()).filter(Boolean);
     if (nicheValues.length === 1) {
-      filter.$or = [...(filter.$or as unknown[] ?? []), { niche: nicheValues[0] }, { category: nicheValues[0] }];
+      andConditions.push({ $or: [{ niche: nicheValues[0] }, { category: nicheValues[0] }] });
     } else if (nicheValues.length > 1) {
-      filter.$or = [...(filter.$or as unknown[] ?? []), { niche: { $in: nicheValues } }, { category: { $in: nicheValues } }];
+      andConditions.push({ $or: [{ niche: { $in: nicheValues } }, { category: { $in: nicheValues } }] });
     }
   }
-  if (assignedTo) filter.assignedTo = assignedTo;
-  if (websiteStatus) filter.websiteStatus = websiteStatus;
-  if (leadQuality) filter.leadQuality = leadQuality;
-  if (city) filter.city = new RegExp(city, "i");
+
+  if (assignedTo) andConditions.push({ assignedTo });
+  if (websiteStatus) andConditions.push({ websiteStatus });
+  if (leadQuality) andConditions.push({ leadQuality });
+  if (city) andConditions.push({ city: new RegExp(city, "i") });
+
   if (search) {
-    filter.$or = [
-      { name: new RegExp(search, "i") },
-      { business_name: new RegExp(search, "i") },
-      { phone: new RegExp(search, "i") },
-    ];
+    andConditions.push({
+      $or: [
+        { name: new RegExp(search, "i") },
+        { business_name: new RegExp(search, "i") },
+        { phone: new RegExp(search, "i") },
+      ],
+    });
   }
+
   if (from || to) {
-    filter.createdAt = {};
-    if (from) (filter.createdAt as Record<string, Date>).$gte = new Date(from);
-    if (to) (filter.createdAt as Record<string, Date>).$lte = new Date(to);
+    const createdAt: Record<string, unknown> = {};
+    if (from) createdAt.$gte = new Date(from);
+    if (to) createdAt.$lte = new Date(to);
+    andConditions.push({ createdAt });
   }
 
   // Tier filter — applies DB-level conditions matching calculateTier logic
   if (tier === "hot") {
-    filter.rating = { $gte: 4.0 };
-    filter.review_count = { $gte: 20 };
-    filter.has_website = false;
-    filter.status = "new";
+    andConditions.push({ rating: { $gte: 4.0 }, review_count: { $gte: 20 }, has_website: false, status: "new" });
   } else if (tier === "warm") {
-    filter.rating = { $gte: 3.5 };
-    filter.review_count = { $gte: 10 };
-    filter.has_website = false;
-    // warm doesn't require status=new
-    if (status) filter.status = status;
+    andConditions.push({ rating: { $gte: 3.5 }, review_count: { $gte: 10 }, has_website: false });
+    if (status) andConditions.push({ status });
   } else if (tier === "cold") {
-    filter.$or = [
+    andConditions.push({ $or: [
       { review_count: { $lt: 10 } },
       { rating: { $lt: 3.5 } },
       { rating: null },
       { review_count: null },
-    ];
+    ] });
   }
 
-  return filter;
+  if (andConditions.length === 0) return {};
+  if (andConditions.length === 1) return andConditions[0];
+  return { $and: andConditions };
 }
 
 async function requireAuth(request: NextRequest) {
@@ -1553,18 +1555,39 @@ async function handleCrmLeads(request: NextRequest, segments: string[]) {
     const skip    = (page - 1) * limit;
 
     const filter: Record<string, unknown> = {};
-    if (payload.role !== "admin") filter.assignedTo = payload.id;
-    if (status) filter.status = status;
+
+    const andConditions: Record<string, unknown>[] = [];
+
+    if (payload.role !== "admin") {
+      andConditions.push({
+        $or: [
+          { assignedTo: payload.id },
+          { assignedTo: null },
+          { assignedTo: { $exists: false } },
+        ],
+      });
+    }
+
+    if (status) {
+      andConditions.push({ status });
+    }
+
     if (search) {
-      filter.$or = [
-        { name: new RegExp(search, "i") },
-        { business_name: new RegExp(search, "i") },
-        { phone: new RegExp(search, "i") },
-      ];
+      andConditions.push({
+        $or: [
+          { name: new RegExp(search, "i") },
+          { business_name: new RegExp(search, "i") },
+          { phone: new RegExp(search, "i") },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
     }
 
     const [items, total] = await Promise.all([
-      CrmBuyerLead.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate("linked_website_lead_id", "name _id"),
+      CrmBuyerLead.find(filter).sort({ crm_lead_score: -1, createdAt: -1 }).skip(skip).limit(limit).populate("linked_website_lead_id", "name _id"),
       CrmBuyerLead.countDocuments(filter),
     ]);
 
@@ -1605,6 +1628,29 @@ async function handleCrmLeads(request: NextRequest, segments: string[]) {
     );
     if (!updated) return notFound("CRM lead not found");
     return ok({ lead: updated.toObject() });
+  }
+
+  // POST /crm-leads/auto-assign
+  if (first === "auto-assign") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    const employees = await User.find({ role: "employee", isActive: true }).sort({ createdAt: 1 });
+    if (employees.length === 0) return fail("No active employees found", 400);
+
+    const allCrmLeads = await CrmBuyerLead.find({}).sort({ createdAt: 1 });
+    if (allCrmLeads.length === 0) return fail("No CRM leads found", 400);
+
+    const updates = allCrmLeads.map((lead, index) => ({
+      updateOne: {
+        filter: { _id: lead._id },
+        update: { assignedTo: employees[index % employees.length]._id },
+      },
+    }));
+
+    await CrmBuyerLead.bulkWrite(updates);
+    return ok({ assignedCount: allCrmLeads.length, employeeCount: employees.length });
   }
 
   // GET /crm-leads/:id — single lead

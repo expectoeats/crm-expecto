@@ -40,6 +40,9 @@ const crmBuyerLeadSchema = new Schema(
     // Link back to the website lead in the main leads collection
     linked_website_lead_id: { type: Schema.Types.ObjectId, ref: "Lead", default: null },
 
+    // Assigned employee
+    assignedTo: { type: Schema.Types.ObjectId, ref: "User", default: null },
+
     followUpDate: { type: Date, default: null },
     followUpNote: { type: String, trim: true, default: "" },
 
