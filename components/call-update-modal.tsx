@@ -1,7 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarClock, CheckCircle2, PhoneCall, Save, Sparkles, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import {
+  RiCalendarScheduleLine,
+  RiCheckboxCircleLine,
+  RiPhoneLine,
+  RiSaveLine,
+  RiCloseLine,
+  RiCheckDoubleLine,
+  RiHandCoinLine,
+  RiBarChartLine,
+  RiThumbDownLine,
+  RiPhoneLine as RiPhoneOffLine,
+  RiTimeLine,
+  RiAlertLine,
+  RiEditLine as RiEdit3Line,
+} from "react-icons/ri";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import type { LeadRecord } from "@/components/lead-utils";
@@ -9,8 +24,9 @@ import type { LeadRecord } from "@/components/lead-utils";
 const outcomeOptions = [
   {
     value: "deal_done",
-    label: "Deal done",
+    label: "Deal Done",
     helper: "Client agreed. Mark this as won.",
+    icon: <RiCheckDoubleLine className="h-4 w-4" />,
     connected: true,
     needsFollowUp: false,
   },
@@ -18,27 +34,39 @@ const outcomeOptions = [
     value: "connected_interested",
     label: "Interested",
     helper: "Good conversation. Keep this warm.",
+    icon: <RiCheckboxCircleLine className="h-4 w-4" />,
+    connected: true,
+    needsFollowUp: true,
+  },
+  {
+    value: "price_negotiation",
+    label: "Price Negotiation",
+    helper: "They want to discuss pricing further.",
+    icon: <RiHandCoinLine className="h-4 w-4" />,
     connected: true,
     needsFollowUp: true,
   },
   {
     value: "callback_requested",
-    label: "Reminder / callback",
+    label: "Callback Requested",
     helper: "They asked you to call later.",
+    icon: <RiCalendarScheduleLine className="h-4 w-4" />,
     connected: true,
     needsFollowUp: true,
   },
   {
     value: "proposal_sent",
-    label: "Proposal sent",
+    label: "Proposal Sent",
     helper: "Pitch landed. Proposal is the next step.",
+    icon: <RiBarChartLine className="h-4 w-4" />,
     connected: true,
     needsFollowUp: true,
   },
   {
     value: "no_answer",
-    label: "Call not received",
+    label: "Call Not Received",
     helper: "No response. Try again later.",
+    icon: <RiPhoneOffLine className="h-4 w-4" />,
     connected: false,
     needsFollowUp: true,
   },
@@ -46,20 +74,23 @@ const outcomeOptions = [
     value: "busy",
     label: "Busy",
     helper: "They were unavailable but reachable.",
+    icon: <RiTimeLine className="h-4 w-4" />,
     connected: true,
     needsFollowUp: true,
   },
   {
     value: "wrong_number",
-    label: "Wrong number",
+    label: "Wrong Number",
     helper: "Bad contact. Remove from active chase.",
+    icon: <RiAlertLine className="h-4 w-4" />,
     connected: false,
     needsFollowUp: false,
   },
   {
     value: "not_interested",
-    label: "Not interested",
+    label: "Not Interested",
     helper: "Close this politely and move on.",
+    icon: <RiThumbDownLine className="h-4 w-4" />,
     connected: true,
     needsFollowUp: false,
   },
@@ -88,8 +119,13 @@ export function CallUpdateModal({
   const [duration, setDuration] = useState("");
   const [followUpDate, setFollowUpDate] = useState(defaultFollowUpDate);
   const [followUpNote, setFollowUpNote] = useState("");
+  const [manualNote, setManualNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const selectedOutcome = useMemo(() => outcomeOptions.find((option) => option.value === outcome) ?? outcomeOptions[0], [outcome]);
+
+  const selectedOutcome = useMemo(
+    () => outcomeOptions.find((o) => o.value === outcome) ?? outcomeOptions[0],
+    [outcome]
+  );
 
   async function saveCallUpdate() {
     setSaving(true);
@@ -99,7 +135,7 @@ export function CallUpdateModal({
         body: JSON.stringify({
           outcome,
           connected: selectedOutcome.connected,
-          notes,
+          notes: manualNote.trim() ? `${notes}\n\n[Manual note]: ${manualNote.trim()}` : notes,
           duration,
           followUpDate: selectedOutcome.needsFollowUp ? followUpDate : "",
           followUpNote: selectedOutcome.needsFollowUp ? followUpNote || selectedOutcome.helper : "",
@@ -109,6 +145,7 @@ export function CallUpdateModal({
       setNotes("");
       setDuration("");
       setFollowUpNote("");
+      setManualNote("");
       setFollowUpDate(defaultFollowUpDate());
       await onSaved?.(response.data?.lead ?? lead);
       onClose();
@@ -118,85 +155,140 @@ export function CallUpdateModal({
   }
 
   if (!open) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950">
+  return createPortal(
+    <div className="fixed inset-0 overflow-y-auto bg-slate-950" style={{zIndex:99999}}>
       <div className="min-h-full bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),_transparent_35%),linear-gradient(180deg,_#020617_0%,_#0f172a_100%)] px-4 py-5 text-white">
+
+        {/* Header */}
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200">Call update</p>
-            <h2 className="mt-2 text-2xl font-semibold">{lead.name}</h2>
-            <p className="mt-1 text-sm text-slate-300">{lead.phone}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-300">Call Update</p>
+            <h2 className="mt-1.5 text-2xl font-bold">{lead.name}</h2>
+            <p className="mt-0.5 text-sm text-slate-400">{lead.phone}</p>
           </div>
-          <button onClick={onClose} className="rounded-2xl bg-white/10 p-3 text-white ring-1 ring-white/15">
-            <X className="h-5 w-5" />
+          <button
+            onClick={onClose}
+            className="rounded-2xl bg-white/10 p-3 text-white ring-1 ring-white/15 hover:bg-white/20 transition"
+          >
+            <RiCloseLine className="h-5 w-5" />
           </button>
         </div>
 
         <div className="mx-auto mt-6 grid max-w-3xl gap-4">
+
+          {/* Call again button */}
           <a
             href={`tel:${lead.phone}`}
-            className="inline-flex min-h-[58px] items-center justify-center gap-2 rounded-3xl bg-emerald-500 px-5 py-4 text-base font-bold text-white shadow-[0_20px_50px_rgba(16,185,129,0.28)]"
+            className="inline-flex min-h-[58px] items-center justify-center gap-2 rounded-3xl bg-emerald-500 px-5 py-4 text-base font-bold text-white shadow-[0_20px_50px_rgba(16,185,129,0.28)] hover:bg-emerald-600 transition active:scale-[0.97]"
           >
-            <PhoneCall className="h-5 w-5" />
-            Call again
+            <RiPhoneLine className="h-5 w-5" />
+            Call Again
           </a>
 
-          <div className="rounded-[2rem] bg-white p-4 text-slate-950 shadow-2xl">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-amber-500" />
-              <p className="text-sm font-semibold">What happened on the call?</p>
+          {/* Outcome picker */}
+          <div className="rounded-[2rem] bg-white p-5 text-slate-950 shadow-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              <RiBarChartLine className="h-5 w-5 text-amber-500" />
+              <p className="text-sm font-bold text-slate-800">What happened on the call?</p>
             </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               {outcomeOptions.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => setOutcome(option.value)}
-                  className={`rounded-2xl p-3 text-left ring-1 transition ${
-                    outcome === option.value ? "bg-slate-950 text-white ring-slate-950" : "bg-slate-50 text-slate-700 ring-slate-200"
+                  className={`rounded-2xl p-3.5 text-left ring-1 transition ${
+                    outcome === option.value
+                      ? "bg-slate-950 text-white ring-slate-950"
+                      : "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-slate-100"
                   }`}
                 >
                   <span className="flex items-center gap-2 text-sm font-semibold">
-                    {outcome === option.value ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : null}
+                    <span className={outcome === option.value ? "text-emerald-400" : "text-slate-400"}>
+                      {option.icon}
+                    </span>
                     {option.label}
                   </span>
-                  <span className={`mt-1 block text-xs ${outcome === option.value ? "text-slate-300" : "text-slate-500"}`}>{option.helper}</span>
+                  <span className={`mt-1 block text-xs leading-relaxed ${outcome === option.value ? "text-slate-400" : "text-slate-500"}`}>
+                    {option.helper}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="rounded-[2rem] bg-white p-4 text-slate-950 shadow-2xl">
+          {/* Details */}
+          <div className="rounded-[2rem] bg-white p-5 text-slate-950 shadow-2xl space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Select value={duration} onChange={(event) => setDuration(event.target.value)}>
+              <Select value={duration} onChange={(e) => setDuration(e.target.value)}>
                 <option value="">Call duration</option>
                 <option value="<1 min">Under 1 min</option>
-                <option value="1-3 min">1-3 min</option>
-                <option value="3-7 min">3-7 min</option>
+                <option value="1-3 min">1–3 min</option>
+                <option value="3-7 min">3–7 min</option>
                 <option value="7+ min">7+ min</option>
               </Select>
               {selectedOutcome.needsFollowUp ? (
-                <Input type="datetime-local" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} />
+                <Input
+                  type="datetime-local"
+                  value={followUpDate}
+                  onChange={(e) => setFollowUpDate(e.target.value)}
+                />
               ) : null}
             </div>
+
             {selectedOutcome.needsFollowUp ? (
-              <div className="mt-3 rounded-2xl bg-orange-50 p-3 text-sm text-orange-800 ring-1 ring-orange-200">
-                <CalendarClock className="mr-2 inline h-4 w-4" />
-                This will also create/update the reminder for this lead.
+              <div className="rounded-2xl bg-orange-50 p-3 text-sm text-orange-800 ring-1 ring-orange-200 flex items-start gap-2">
+                <RiCalendarScheduleLine className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+                <span>This will also create / update the follow-up reminder for this lead.</span>
               </div>
             ) : null}
-            <Textarea className="mt-3" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Quick notes: objection, budget, decision maker, next promise..." />
+
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Quick notes: objection, budget, decision maker, next promise…"
+            />
+
             {selectedOutcome.needsFollowUp ? (
-              <Input className="mt-3" value={followUpNote} onChange={(event) => setFollowUpNote(event.target.value)} placeholder="Reminder note, e.g. send pricing before calling" />
+              <Input
+                value={followUpNote}
+                onChange={(e) => setFollowUpNote(e.target.value)}
+                placeholder="Reminder note, e.g. send pricing before calling"
+              />
             ) : null}
-            <Button className="mt-4 w-full" onClick={saveCallUpdate} disabled={saving}>
-              <Save className="h-4 w-4" />
-              {saving ? "Saving..." : "Save call update"}
-            </Button>
           </div>
+
+          {/* Manual / custom note */}
+          <div className="rounded-[2rem] bg-white p-5 text-slate-950 shadow-2xl">
+            <div className="flex items-center gap-2 mb-3">
+              <RiEdit3Line className="h-5 w-5 text-violet-500" />
+              <p className="text-sm font-bold text-slate-800">Add a custom note</p>
+            </div>
+            <Textarea
+              value={manualNote}
+              onChange={(e) => setManualNote(e.target.value)}
+              placeholder="Write anything else you want to remember about this call…"
+              className="min-h-[90px]"
+            />
+          </div>
+
+          {/* Save */}
+          <Button
+            className="w-full min-h-[54px] rounded-3xl text-base font-bold"
+            onClick={saveCallUpdate}
+            disabled={saving}
+          >
+            <RiSaveLine className="h-5 w-5" />
+            {saving ? "Saving…" : "Save Call Update"}
+          </Button>
+
+          {/* Bottom spacing */}
+          <div className="h-6" />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

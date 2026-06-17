@@ -4,16 +4,37 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import {
-  ChevronDown, ChevronLeft, ChevronRight, Download, Filter,
-  MessageCircle, PhoneCall, Plus, Search, Shuffle, Star, TrendingUp, X, Globe, ShoppingCart,
-} from "lucide-react";
+  RiArrowDownSLine,
+  RiArrowLeftSLine,
+  RiArrowRightSLine,
+  RiDownloadLine,
+  RiEqualizerLine,
+  RiWhatsappLine,
+  RiPhoneLine,
+  RiAddLine,
+  RiSearchLine,
+  RiShuffleLine,
+  RiStarFill,
+  RiLineChartLine,
+  RiCloseLine,
+  RiGlobeLine,
+  RiShoppingCartLine,
+  RiFireLine,
+  RiSnowflakeLine,
+  RiTrophyLine,
+  RiChatSmileLine,
+  RiTimeLine,
+  RiEyeLine,
+  RiDeleteBin6Line,
+} from "react-icons/ri";
 import { Card, EmptyState, Input, Select, SectionTitle, Button, SkeletonCard } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, TierBadge } from "@/components/badges";
 import { type LeadRecord } from "@/components/lead-utils";
 import { LeadDrawer } from "@/components/lead-drawer";
 import { AdminCrmLeadsTab } from "@/components/admin-crm-leads-tab";
+import { CallUpdateModal } from "@/components/call-update-modal";
 import { apiFetch } from "@/lib/http";
-import { statusConfig, ALL_STATUSES } from "@/lib/ui";
+import { statusConfig, ALL_STATUSES, cn } from "@/lib/ui";
 
 type Employee = { _id: string; name: string };
 type LeadPageResponse = {
@@ -138,6 +159,12 @@ function AdminLeadsInner() {
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [drawerLeadId, setDrawerLeadId]   = useState<string | null>(null);
 
+  // delete state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<"multi" | "niche">("multi");
+  const [deleteNiche, setDeleteNiche] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => { setPage(1); }, [status, niche, employee, leadQuality, websiteStatus, city, debouncedSearch, fromDate, toDate, tierFilter, sortOption]);
 
   useEffect(() => {
@@ -199,6 +226,56 @@ function AdminLeadsInner() {
     URL.revokeObjectURL(url);
   }
 
+  async function deleteSingleLead(id: string) {
+    setDeleting(true);
+    try {
+      await apiFetch(`/leads/${id}`, { method: "DELETE" });
+      setSelected((c) => c.filter((x) => x !== id));
+      await mutate();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function deleteSelected() {
+    if (selected.length === 0) return;
+    setDeleting(true);
+    try {
+      await apiFetch("/leads/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ ids: selected }),
+      });
+      setSelected([]);
+      await mutate();
+      setDeleteModalOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function deleteByNiche() {
+    if (!deleteNiche) return;
+    setDeleting(true);
+    try {
+      // Find all raw DB values that map to this broad category
+      const rawValues = Object.entries(rawToBroad)
+        .filter(([, broad]) => broad === deleteNiche)
+        .map(([raw]) => raw);
+      // Also include the broad category itself in case some leads use it directly
+      if (!rawValues.includes(deleteNiche)) rawValues.push(deleteNiche);
+
+      await apiFetch("/leads/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ niche: deleteNiche, rawValues }),
+      });
+      setDeleteNiche("");
+      await mutate();
+      setDeleteModalOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-4 pb-6">
 
@@ -211,7 +288,7 @@ function AdminLeadsInner() {
             pipeline === "website" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          <Globe className="h-4 w-4" />
+          <RiGlobeLine className="h-4 w-4" />
           Website / Portfolio
         </button>
         <button
@@ -221,7 +298,7 @@ function AdminLeadsInner() {
             pipeline === "crm" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          <ShoppingCart className="h-4 w-4" />
+          <RiShoppingCartLine className="h-4 w-4" />
           CRM Leads
         </button>
       </div>
@@ -239,15 +316,18 @@ function AdminLeadsInner() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={() => (window.location.href = "/admin/leads/new")} className="h-10 px-3">
-            <Plus className="h-4 w-4" />
+            <RiAddLine className="h-4 w-4" />
             <span className="hidden sm:inline">Add</span>
           </Button>
           <Button variant="accent" onClick={handleAutoAssign} disabled={autoAssigning} className="h-10 px-3">
-            <Shuffle className="h-4 w-4" />
+            <RiShuffleLine className="h-4 w-4" />
             <span className="hidden sm:inline">{autoAssigning ? "..." : "Auto-Assign"}</span>
           </Button>
           <Button variant="secondary" onClick={exportCsv} className="h-10 px-3">
-            <Download className="h-4 w-4" />
+            <RiDownloadLine className="h-4 w-4" />
+          </Button>
+          <Button variant="secondary" onClick={() => setDeleteModalOpen(true)} className="h-10 px-3 text-red-600 hover:text-red-700">
+            <RiDeleteBin6Line className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -290,17 +370,17 @@ function AdminLeadsInner() {
         <div className="flex gap-1.5 overflow-x-auto pb-0.5">
           {(
             [
-              { key: "",     label: "📋 All" },
-              { key: "hot",  label: "🔥 Hot" },
-              { key: "warm", label: "⚡ Warm" },
-              { key: "cold", label: "🧊 Cold" },
-            ] as { key: string; label: string }[]
-          ).map(({ key, label }) => (
+          { key: "",     label: "All",  icon: null },
+              { key: "hot",  label: "Hot",  icon: <RiFireLine className="h-3.5 w-3.5" /> },
+              { key: "warm", label: "Warm", icon: <RiStarFill className="h-3.5 w-3.5" /> },
+              { key: "cold", label: "Cold", icon: <RiSnowflakeLine className="h-3.5 w-3.5" /> },
+            ] as { key: string; label: string; icon: React.ReactNode }[]
+          ).map(({ key, label, icon }) => (
             <button
               key={key}
               type="button"
               onClick={() => { setTierFilter(key); setPage(1); }}
-              className={`shrink-0 rounded-2xl px-4 py-2 text-xs font-bold transition active:scale-[0.97] ${
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-xs font-bold transition active:scale-[0.97] ${
                 tierFilter === key
                   ? key === "hot"
                     ? "bg-red-500 text-white shadow-sm"
@@ -312,22 +392,23 @@ function AdminLeadsInner() {
                   : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
               }`}
             >
+              {icon}
               {label}
             </button>
           ))}
         </div>
 
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 shrink-0 text-slate-400" />
+          <RiLineChartLine className="h-4 w-4 shrink-0 text-slate-400" />
           <select
             value={sortOption}
             onChange={(e) => { setSortOption(e.target.value); setPage(1); }}
-            className="flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400"
+            className="w-auto max-w-[220px] rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400"
           >
-            <option value="priority_score">🏆 Score (Best First)</option>
-            <option value="rating">⭐ Best Rating</option>
-            <option value="review_count">💬 Most Reviews</option>
-            <option value="newest">🕐 Newest First</option>
+            <option value="priority_score">Score (Best First)</option>
+            <option value="rating">Best Rating</option>
+            <option value="review_count">Most Reviews</option>
+            <option value="newest">Newest First</option>
           </select>
         </div>
       </div>
@@ -335,7 +416,7 @@ function AdminLeadsInner() {
       {/* ── SEARCH + FILTER TOGGLE ── */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <RiSearchLine className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -352,14 +433,14 @@ function AdminLeadsInner() {
               : "bg-white text-slate-700 ring-1 ring-slate-200"
           }`}
         >
-          <Filter className="h-4 w-4" />
+          <RiEqualizerLine className="h-4 w-4" />
           <span className="hidden sm:inline">Filters</span>
           {activeFilterCount > 0 ? (
             <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
               {activeFilterCount}
             </span>
           ) : null}
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+          <RiArrowDownSLine className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
         </button>
       </div>
 
@@ -375,9 +456,9 @@ function AdminLeadsInner() {
             </Select>
             <Select value={leadQuality} onChange={(e) => setLeadQuality(e.target.value)}>
               <option value="">All quality</option>
-              <option value="hot">🔥 Hot</option>
-              <option value="warm">☀️ Warm</option>
-              <option value="cold">❄️ Cold</option>
+              <option value="hot">Hot</option>
+              <option value="warm">Warm</option>
+              <option value="cold">Cold</option>
             </Select>
             <Select value={employee} onChange={(e) => setEmployee(e.target.value)}>
               <option value="">All employees</option>
@@ -421,7 +502,7 @@ function AdminLeadsInner() {
               onClick={clearAll}
               className="flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:text-red-600"
             >
-              <X className="h-4 w-4" />
+              <RiCloseLine className="h-4 w-4" />
               Clear all filters
             </button>
             <button
@@ -457,7 +538,7 @@ function AdminLeadsInner() {
             Go
           </button>
           <button type="button" onClick={() => setSelected([])} className="text-white/60 hover:text-white">
-            <X className="h-4 w-4" />
+            <RiCloseLine className="h-4 w-4" />
           </button>
         </div>
       ) : null}
@@ -468,7 +549,7 @@ function AdminLeadsInner() {
           <SkeletonCard /><SkeletonCard /><SkeletonCard />
         </div>
       ) : leads.length > 0 ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {leads.map((lead) => (
             <LeadCardAdmin
               key={lead._id}
@@ -482,6 +563,7 @@ function AdminLeadsInner() {
               }
               onView={() => setDrawerLeadId(lead._id)}
               onAssigned={() => mutate()}
+              onDelete={(id) => deleteSingleLead(id)}
             />
           ))}
         </div>
@@ -512,7 +594,7 @@ function AdminLeadsInner() {
             onClick={() => setPage((p) => Math.max(p - 1, 1))}
             className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-40 active:scale-[0.97]"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <RiArrowLeftSLine className="h-4 w-4" />
             Prev
           </button>
           <div className="text-center">
@@ -528,7 +610,7 @@ function AdminLeadsInner() {
             className="flex items-center gap-1.5 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40 active:scale-[0.97]"
           >
             Next
-            <ChevronRight className="h-4 w-4" />
+            <RiArrowRightSLine className="h-4 w-4" />
           </button>
         </div>
       ) : null}
@@ -538,6 +620,99 @@ function AdminLeadsInner() {
         onClose={() => setDrawerLeadId(null)}
         onUpdated={() => mutate()}
       />
+
+      {/* ── DELETE MODAL ── */}
+      {deleteModalOpen ? (
+        <div className="fixed inset-0 z-[9999] flex items-end bg-slate-950/60 backdrop-blur-sm sm:items-center sm:justify-center">
+          <div className="w-full rounded-t-[28px] bg-white p-5 shadow-2xl sm:max-w-lg sm:rounded-[28px]">
+            <div className="mx-auto mb-5 h-1.5 w-10 rounded-full bg-slate-200 sm:hidden" />
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-bold text-slate-950">Delete Leads</h2>
+                <p className="mt-0.5 text-sm text-slate-500">This action is permanent and cannot be undone.</p>
+              </div>
+              <button type="button" onClick={() => setDeleteModalOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200">
+                <RiCloseLine className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Mode tabs */}
+            <div className="flex gap-1 rounded-2xl bg-slate-100 p-1 mb-5">
+              {([
+                { key: "multi", label: `Selected (${selected.length})` },
+                { key: "niche", label: "By Niche" },
+              ] as { key: "multi" | "niche"; label: string }[]).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setDeleteMode(key)}
+                  className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                    deleteMode === key ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Multi delete */}
+            {deleteMode === "multi" ? (
+              <div className="space-y-4">
+                {selected.length === 0 ? (
+                  <div className="rounded-2xl bg-slate-50 px-4 py-6 text-center">
+                    <p className="text-sm text-slate-500">No leads selected. Check the boxes on lead cards first.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-red-50 px-4 py-4 ring-1 ring-red-200">
+                    <p className="text-sm font-semibold text-red-800">{selected.length} lead{selected.length !== 1 ? "s" : ""} will be permanently deleted.</p>
+                    <p className="mt-1 text-xs text-red-600">This cannot be undone.</p>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={deleteSelected}
+                  disabled={selected.length === 0 || deleting}
+                  className="w-full rounded-2xl bg-red-600 py-3.5 text-sm font-bold text-white hover:bg-red-700 transition disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : `Delete ${selected.length} Lead${selected.length !== 1 ? "s" : ""}`}
+                </button>
+              </div>
+            ) : null}
+
+            {/* Niche delete */}
+            {deleteMode === "niche" ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Select niche to delete</label>
+                  <Select value={deleteNiche} onChange={(e) => setDeleteNiche(e.target.value)}>
+                    <option value="">— Choose a niche —</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </Select>
+                </div>
+                {deleteNiche ? (
+                  <div className="rounded-2xl bg-red-50 px-4 py-4 ring-1 ring-red-200">
+                    <p className="text-sm font-semibold text-red-800">All leads in <span className="font-bold">&ldquo;{deleteNiche}&rdquo;</span> will be permanently deleted.</p>
+                    <p className="mt-1 text-xs text-red-600">This cannot be undone.</p>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={deleteByNiche}
+                  disabled={!deleteNiche || deleting}
+                  className="w-full rounded-2xl bg-red-600 py-3.5 text-sm font-bold text-white hover:bg-red-700 transition disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : `Delete All "${deleteNiche || "..."}" Leads`}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       </>) /* end website pipeline */}
     </div>
   );
@@ -545,7 +720,7 @@ function AdminLeadsInner() {
 
 /* ── ADMIN LEAD CARD ── */
 function LeadCardAdmin({
-  lead, employees, selected, onSelect, onView, onAssigned,
+  lead, employees, selected, onSelect, onView, onAssigned, onDelete,
 }: {
   lead: LeadRecord;
   employees: Employee[];
@@ -553,107 +728,144 @@ function LeadCardAdmin({
   onSelect: (v: boolean) => void;
   onView: () => void;
   onAssigned: () => void;
+  onDelete: (id: string) => void;
 }) {
   const cfg = statusConfig[lead.status];
   const lastContact = (lead as LeadRecord & { last_contacted_by?: string; last_action?: string }).last_contacted_by;
   const lastAction  = (lead as LeadRecord & { last_contacted_by?: string; last_action?: string }).last_action;
+  const [callModalOpen, setCallModalOpen] = useState(false);
+
+  function handleCallClick() {
+    window.location.href = `tel:${lead.phone}`;
+    setCallModalOpen(true);
+  }
 
   return (
-    <div className={`overflow-hidden rounded-2xl bg-white ring-1 transition-all ${selected ? "ring-slate-950 shadow-md" : "ring-slate-200 shadow-sm"}`}>
-      <div className="p-4 space-y-3">
+    <>
+      <div className={cn(
+        "overflow-hidden rounded-2xl ring-1 transition-all",
+        selected
+          ? "ring-slate-950 shadow-md bg-white"
+          : lead.status === "not_interested" || lead.status === "closed_lost"
+          ? "bg-red-50 ring-red-200 shadow-sm"
+          : lead.status === "interested" || lead.status === "closed_won" || lead.status === "converted"
+          ? "bg-emerald-50 ring-emerald-200 shadow-sm"
+          : "bg-white ring-slate-200 shadow-sm"
+      )}>
+        <div className="p-4 space-y-3">
 
-        {/* ROW 1 — name + niche + tier + checkbox */}
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <button type="button" onClick={onView} className="text-left">
-              <p className="truncate text-[15px] font-bold text-slate-950 hover:text-slate-700">{lead.name}</p>
-            </button>
-            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-              {lead.rating != null ? (
-                <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600">
-                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                  {lead.rating}
-                  {lead.reviewCount != null ? ` (${lead.reviewCount})` : ""}
-                </span>
-              ) : null}
-              {lead.city ? <><span>·</span><span className="truncate">{lead.city}</span></> : null}
-            </p>
+          {/* ROW 1 — name + city/rating + delete + checkbox */}
+          <div className="flex items-start gap-2 min-w-0">
+            <div className="min-w-0 flex-1">
+              <button type="button" onClick={onView} className="text-left w-full">
+                <p className="truncate text-[15px] font-bold text-slate-950 hover:text-slate-700 pr-1">{lead.name}</p>
+              </button>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0 text-xs text-slate-500">
+                {lead.rating != null ? (
+                  <span className="inline-flex items-center gap-0.5 font-semibold text-amber-600">
+                    <RiStarFill className="h-3 w-3 text-amber-400" />
+                    {lead.rating}
+                    {lead.reviewCount != null ? ` (${lead.reviewCount})` : ""}
+                  </span>
+                ) : null}
+                {lead.city ? <><span className="text-slate-300">·</span><span className="truncate">{lead.city}</span></> : null}
+              </p>
+            </div>
+            {/* Controls — always on right, never pushed out */}
+            <div className="flex shrink-0 items-center gap-1.5 ml-1">
+              <button
+                type="button"
+                onClick={() => onDelete(lead._id)}
+                className="flex h-7 w-7 items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition"
+                title="Delete lead"
+              >
+                <RiDeleteBin6Line className="h-3.5 w-3.5" />
+              </button>
+              <label className="flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={(e) => onSelect(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 accent-slate-950"
+                />
+              </label>
+            </div>
           </div>
-          <NicheBadge niche={lead.niche} />
-          <TierBadge tier={lead.tier} label={lead.tierLabel} />
-          <label className="flex cursor-pointer items-center">
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={(e) => onSelect(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 accent-slate-950"
-            />
-          </label>
-        </div>
 
-        {/* ROW 2 — badges + contact status */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <LeadQualityBadge quality={lead.leadQuality} />
-          {cfg ? (
-            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>
-              {cfg.label}
-            </span>
+          {/* ROW 2 — niche + tier + status badges */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <NicheBadge niche={lead.niche} />
+            {lead.tier ? <TierBadge tier={lead.tier} label={lead.tierLabel} /> : null}
+            {cfg ? (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}>
+                {cfg.label}
+              </span>
+            ) : null}
+            {lastContact ? (
+              <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                {lastAction === "whatsapped"
+                  ? <RiWhatsappLine className="h-3 w-3 text-[#1a9e4a]" />
+                  : <RiPhoneLine className="h-3 w-3 text-blue-500" />}
+                {lastContact}
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-400">Never contacted</span>
+            )}
+          </div>
+
+          {/* ROW 3 — pitch preview */}
+          {lead.pitchMessage ? (
+            <p className="line-clamp-1 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-800 ring-1 ring-blue-100">
+              {lead.pitchMessage}
+            </p>
           ) : null}
-          {lastContact ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
-              {lastAction === "whatsapped"
-                ? <MessageCircle className="h-3 w-3 text-[#1a9e4a]" />
-                : <PhoneCall className="h-3 w-3 text-blue-500" />}
-              {lastContact}
-            </span>
-          ) : (
-            <span className="text-[11px] text-slate-400">Never contacted</span>
-          )}
+
+          {/* ROW 4 — action buttons */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={handleCallClick}
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-sm font-semibold text-white active:scale-[0.97] hover:bg-emerald-600 transition"
+            >
+              <RiPhoneLine className="h-4 w-4" />
+              Call
+            </button>
+            <a
+              href={getWaUrl(lead)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-[#25D366] text-sm font-semibold text-white active:scale-[0.97] hover:bg-[#1fba58] transition"
+            >
+              <RiWhatsappLine className="h-4 w-4" />
+              WA
+            </a>
+            <button
+              type="button"
+              onClick={onView}
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-sm font-semibold text-slate-700 active:scale-[0.97] hover:bg-slate-200 transition"
+            >
+              <RiEyeLine className="h-4 w-4" />
+              View
+            </button>
+          </div>
         </div>
 
-        {/* ROW 3 — pitch preview */}
-        {lead.pitchMessage ? (
-          <p className="line-clamp-1 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-800 ring-1 ring-blue-100">
-            {lead.pitchMessage}
-          </p>
-        ) : null}
-
-        {/* ROW 4 — action buttons */}
-        <div className="grid grid-cols-3 gap-2">
-          <a
-            href={`tel:${lead.phone}`}
-            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-sm font-semibold text-white active:scale-[0.97]"
-          >
-            <PhoneCall className="h-4 w-4" />
-            Call
-          </a>
-          <a
-            href={getWaUrl(lead)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-[#25D366] text-sm font-semibold text-white active:scale-[0.97]"
-          >
-            <MessageCircle className="h-4 w-4" />
-            WA
-          </a>
-          <button
-            type="button"
-            onClick={onView}
-            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold text-slate-700 active:scale-[0.97]"
-          >
-            View
-          </button>
+        {/* ASSIGN FOOTER */}
+        <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-4 py-2.5">
+          <span className="shrink-0 text-[11px] font-semibold text-slate-400">Assign:</span>
+          <div className="flex-1">
+            <AssignDropdown lead={lead} employees={employees} onAssigned={onAssigned} />
+          </div>
+          <span className="shrink-0 text-[11px] text-slate-400">{lead.phone}</span>
         </div>
       </div>
 
-      {/* ASSIGN FOOTER */}
-      <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-4 py-2.5">
-        <span className="shrink-0 text-[11px] font-semibold text-slate-400">Assign:</span>
-        <div className="flex-1">
-          <AssignDropdown lead={lead} employees={employees} onAssigned={onAssigned} />
-        </div>
-        <span className="shrink-0 text-[11px] text-slate-400">{lead.phone}</span>
-      </div>
-    </div>
+      <CallUpdateModal
+        lead={lead}
+        open={callModalOpen}
+        onClose={() => setCallModalOpen(false)}
+        onSaved={async () => { onAssigned(); }}
+      />
+    </>
   );
 }

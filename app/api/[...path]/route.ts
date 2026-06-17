@@ -707,6 +707,39 @@ async function handleLeads(request: NextRequest, segments: string[]) {
     return methodNotAllowed(["GET", "POST"]);
   }
 
+  if (first === "bulk-delete") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    const body = (await parseJson<{ ids?: string[]; niche?: string; rawValues?: string[] }>(request)) ?? {};
+
+    // Delete by niche — body.rawValues contains all raw DB values that map to this broad category
+    if (body.niche && !body.ids) {
+      // rawValues is the list of exact DB niche/category strings that belong to this broad category
+      const rawValues: string[] = Array.isArray(body.rawValues) && body.rawValues.length > 0
+        ? body.rawValues
+        : [body.niche]; // fallback to exact match
+
+      const result = await Lead.deleteMany({
+        $or: [
+          { niche: { $in: rawValues } },
+          { category: { $in: rawValues } },
+        ],
+      });
+      return ok({ deletedCount: result.deletedCount }, `Deleted ${result.deletedCount} leads`);
+    }
+
+    // Delete by IDs
+    if (Array.isArray(body.ids) && body.ids.length > 0) {
+      const validIds = body.ids.filter((id) => isValidObjectId(id));
+      const result = await Lead.deleteMany({ _id: { $in: validIds } });
+      return ok({ deletedCount: result.deletedCount }, `Deleted ${result.deletedCount} leads`);
+    }
+
+    return fail("Provide ids array or niche string", 400);
+  }
+
   if (first === "bulk") {
     if (request.method !== "POST") return methodNotAllowed(["POST"]);
     const payload = await requireAdmin(request);
@@ -1215,6 +1248,14 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       employeeCount: employees.length,
       message: `${allLeads.length} leads assigned across ${employees.length} employees`,
     });
+  }
+
+  // DELETE /leads/:id
+  if (first && isValidObjectId(first) && !second && request.method === "DELETE") {
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+    await Lead.findByIdAndDelete(first);
+    return ok(undefined, "Lead deleted");
   }
 
   if (second) {

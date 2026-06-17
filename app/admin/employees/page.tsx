@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { AlertCircle, KeyRound, Plus, X } from "lucide-react";
+import {
+  RiAlertLine,
+  RiKeyLine,
+  RiAddLine,
+  RiCloseLine,
+} from "react-icons/ri";
 import { Button, Card, EmptyState, Input, SectionTitle, SkeletonCard } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { LeadCard, type LeadRecord } from "@/components/lead-utils";
@@ -103,7 +108,7 @@ export default function EmployeesPage() {
         description="Create employees, inspect assignments, and keep the team active."
         action={
           <Button onClick={() => setShowAdd(true)}>
-            <Plus className="h-4 w-4" />
+            <RiAddLine className="h-4 w-4" />
             Add Employee
           </Button>
         }
@@ -113,7 +118,7 @@ export default function EmployeesPage() {
         <Card className="border-amber-200 bg-amber-50">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500 text-white">
-              <AlertCircle className="h-5 w-5" />
+              <RiAlertLine className="h-5 w-5" />
             </div>
             <div className="flex-1">
               <p className="text-sm font-semibold text-slate-950">Password reset requests</p>
@@ -148,7 +153,7 @@ export default function EmployeesPage() {
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button variant="secondary" onClick={() => openResetModal(employee)}>
-                    <KeyRound className="h-4 w-4" />
+                    <RiKeyLine className="h-4 w-4" />
                     Reset
                   </Button>
                   <Button variant="secondary" onClick={() => {
@@ -198,7 +203,7 @@ export default function EmployeesPage() {
                 <p className="text-sm text-slate-600">{selectedEmployeeLeadCount} assigned leads</p>
               </div>
               <Button variant="ghost" onClick={() => setSelectedEmployee(null)}>
-                <X className="h-4 w-4" />
+                <RiCloseLine className="h-4 w-4" />
               </Button>
             </div>
             <div className="mt-4 space-y-3">
@@ -219,7 +224,7 @@ export default function EmployeesPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-950">Add employee</h2>
               <Button variant="ghost" onClick={() => setShowAdd(false)}>
-                <X className="h-4 w-4" />
+                <RiCloseLine className="h-4 w-4" />
               </Button>
             </div>
             <div className="mt-4 space-y-3">
@@ -245,7 +250,7 @@ export default function EmployeesPage() {
                 <p className="mt-1 text-sm text-slate-600">{resetEmployee.name} ke liye password set karein.</p>
               </div>
               <Button variant="ghost" onClick={() => setResetEmployee(null)}>
-                <X className="h-4 w-4" />
+                <RiCloseLine className="h-4 w-4" />
               </Button>
             </div>
 
@@ -291,7 +296,7 @@ export default function EmployeesPage() {
                 <p className="mt-1 text-sm text-slate-600">Employees ne forgot password request bheji hai.</p>
               </div>
               <Button variant="ghost" onClick={closeResetRequests}>
-                <X className="h-4 w-4" />
+                <RiCloseLine className="h-4 w-4" />
               </Button>
             </div>
 
@@ -316,7 +321,7 @@ export default function EmployeesPage() {
                         openResetModal(employee);
                       }}
                     >
-                      <KeyRound className="h-4 w-4" />
+                    <RiKeyLine className="h-4 w-4" />
                       Reset
                     </Button>
                   </div>

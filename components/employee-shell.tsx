@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import type { ReactNode } from "react";
 import useSWR from "swr";
-import { KeyRound, LogOut, House, ListChecks, X } from "lucide-react";
+import { RiKeyLine, RiLogoutBoxLine, RiHome4Line, RiListCheck3, RiCloseLine } from "react-icons/ri";
 import { Button, Input } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { cn } from "@/lib/ui";
@@ -14,8 +14,8 @@ import { BrandMark } from "@/components/brand-mark";
 import { InstallAppButton } from "@/components/install-app-button";
 
 const navItems = [
-  { href: "/dashboard", label: "Home", icon: House },
-  { href: "/leads", label: "Leads", icon: ListChecks },
+  { href: "/dashboard", label: "Home", icon: RiHome4Line },
+  { href: "/leads", label: "Leads", icon: RiListCheck3 },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -80,10 +80,10 @@ export function EmployeeShell({ children, followUpCount = 0 }: { children: React
           <div className="flex items-center gap-2">
             <InstallAppButton compact />
             <Button variant="secondary" onClick={() => setShowPasswordModal(true)}>
-              <KeyRound className="h-4 w-4" />
+              <RiKeyLine className="h-4 w-4" />
             </Button>
             <Button variant="secondary" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
+              <RiLogoutBoxLine className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -101,7 +101,7 @@ export function EmployeeShell({ children, followUpCount = 0 }: { children: React
                 <p className="mt-1 text-sm text-slate-600">Current password daal kar naya password set karein.</p>
               </div>
               <Button variant="ghost" onClick={() => setShowPasswordModal(false)}>
-                <X className="h-4 w-4" />
+                <RiCloseLine className="h-4 w-4" />
               </Button>
             </div>
             <form className="mt-4 space-y-3" onSubmit={handleChangePassword}>

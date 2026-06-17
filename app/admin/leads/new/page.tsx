@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Plus, Trash2 } from "lucide-react";
+import { RiAddLine, RiDeleteBinLine } from "react-icons/ri";
 import { Button, Card, Input, Select, SectionTitle, Textarea } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 
@@ -110,7 +110,7 @@ export default function AddLeadPage() {
                 variant="secondary"
                 onClick={() => setWeakPoints((current) => [...current, ""])}
               >
-                <Plus className="h-4 w-4" />
+                <RiAddLine className="h-4 w-4" />
                 Add weak point
               </Button>
             </div>
@@ -126,7 +126,7 @@ export default function AddLeadPage() {
                     placeholder="Weak point"
                   />
                   <Button type="button" variant="secondary" onClick={() => setWeakPoints((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
-                    <Trash2 className="h-4 w-4" />
+                    <RiDeleteBinLine className="h-4 w-4" />
                   </Button>
                 </div>
               ))}

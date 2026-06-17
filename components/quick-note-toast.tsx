@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, MessageCircle, PhoneCall, X } from "lucide-react";
+import {
+  RiCalendarLine,
+  RiWhatsappLine,
+  RiPhoneLine,
+  RiCloseLine,
+} from "react-icons/ri";
 import { apiFetch } from "@/lib/http";
 
 const QUICK_CHIPS = [
   { label: "Not picked up", note: "Not picked up" },
   { label: "Will call back", note: "Will call back" },
-  { label: "Interested ✅", note: "Interested, wants to know more" },
-  { label: "Not interested ❌", note: "Not interested" },
+  { label: "Interested", note: "Interested, wants to know more" },
+  { label: "Not interested", note: "Not interested" },
 ];
 
 export function QuickNoteToast({
@@ -78,12 +83,12 @@ export function QuickNoteToast({
       {/* Header */}
       <div className="flex items-center justify-between rounded-t-2xl bg-slate-950 px-4 py-3">
         <div className="flex items-center gap-2 text-white">
-          {via === "whatsapp" ? <MessageCircle className="h-4 w-4 text-[#25D366]" /> : <PhoneCall className="h-4 w-4 text-emerald-400" />}
+          {via === "whatsapp" ? <RiWhatsappLine className="h-4 w-4 text-[#25D366]" /> : <RiPhoneLine className="h-4 w-4 text-emerald-400" />}
           <span className="text-sm font-semibold">Add a quick note</span>
           <span className="text-xs text-white/50">· {leadName}</span>
         </div>
         <button onClick={onClose} className="rounded-lg p-1 text-white/60 hover:text-white">
-          <X className="h-4 w-4" />
+          <RiCloseLine className="h-4 w-4" />
         </button>
       </div>
 
@@ -125,13 +130,13 @@ export function QuickNoteToast({
             showFollowUp ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-600"
           }`}
         >
-          <CalendarDays className="h-3.5 w-3.5" />
+          <RiCalendarLine className="h-3.5 w-3.5" />
           Follow up in...
         </button>
 
         {showFollowUp ? (
           <div className="flex items-center gap-2 rounded-xl bg-orange-50 p-3 ring-1 ring-orange-100">
-            <CalendarDays className="h-4 w-4 text-orange-500" />
+            <RiCalendarLine className="h-4 w-4 text-orange-500" />
             <span className="text-sm text-orange-800">Follow up in</span>
             <select
               value={followUpDays}

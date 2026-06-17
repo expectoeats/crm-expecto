@@ -3,7 +3,17 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import useSWR, { mutate } from "swr";
-import { AlertTriangle, CalendarDays, ExternalLink, MessageCircle, PhoneCall, Save, Star, StickyNote, X } from "lucide-react";
+import {
+  RiAlertLine,
+  RiCalendarLine,
+  RiExternalLinkLine,
+  RiWhatsappLine,
+  RiPhoneLine,
+  RiSaveLine,
+  RiStarFill,
+  RiStickyNoteLine,
+  RiCloseLine,
+} from "react-icons/ri";
 import { EmployeeShell } from "@/components/employee-shell";
 import { Button, Card, EmptyState, Input, Select, Textarea } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, StatusBadge, WebsiteStatusBadge } from "@/components/badges";
@@ -90,7 +100,7 @@ export default function LeadDetailPage() {
             </p>
             {lead.rating != null ? (
               <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700 ring-1 ring-amber-200">
-                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <RiStarFill className="h-3.5 w-3.5 text-amber-400" />
                 {lead.rating}
                 {lead.reviewCount != null ? <span className="font-normal text-amber-600">({lead.reviewCount} reviews)</span> : null}
                 {lead.score != null ? <span className="ml-1 font-normal text-slate-500">· Score: {lead.score}</span> : null}
@@ -117,7 +127,7 @@ export default function LeadDetailPage() {
               rel="noopener noreferrer"
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
             >
-              <MessageCircle className="h-4 w-4" />
+              <RiWhatsappLine className="h-4 w-4" />
               Send on WhatsApp
             </a>
           </Card>
@@ -142,7 +152,7 @@ export default function LeadDetailPage() {
               <div className="space-y-2">
                 {lead.weakPoints.map((point) => (
                   <div key={point} className="flex items-start gap-2 rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-700 ring-1 ring-amber-100">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <RiAlertLine className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                     <span>{point}</span>
                   </div>
                 ))}
@@ -166,7 +176,7 @@ export default function LeadDetailPage() {
               className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 underline decoration-blue-200 underline-offset-4"
             >
               {lead.websiteUrl}
-              <ExternalLink className="h-4 w-4" />
+              <RiExternalLinkLine className="h-4 w-4" />
             </a>
           ) : null}
           {isWebsiteBad ? (
@@ -199,7 +209,7 @@ export default function LeadDetailPage() {
             {lead.followUpNote ? <p className="mt-2 text-sm text-slate-600">{lead.followUpNote}</p> : null}
           </div>
           <Button variant="secondary" className="w-full" onClick={() => setFollowupOpen(true)}>
-            <CalendarDays className="h-4 w-4" />
+            <RiCalendarLine className="h-4 w-4" />
             Set follow-up
           </Button>
         </Card>
@@ -213,7 +223,7 @@ export default function LeadDetailPage() {
             onClick={() => setCallOpen(true)}
             className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white"
           >
-            <PhoneCall className="h-4 w-4" />
+            <RiPhoneLine className="h-4 w-4" />
             Call
           </a>
           <a
@@ -222,11 +232,11 @@ export default function LeadDetailPage() {
             rel="noopener noreferrer"
             className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-white"
           >
-            <MessageCircle className="h-4 w-4" />
+            <RiWhatsappLine className="h-4 w-4" />
             WhatsApp
           </a>
           <Button variant="secondary" className="min-h-[52px]" onClick={() => setCallOpen(true)}>
-            <StickyNote className="h-4 w-4" />
+            <RiStickyNoteLine className="h-4 w-4" />
             Update
           </Button>
         </div>
@@ -254,14 +264,14 @@ export default function LeadDetailPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-950">Set follow-up</h2>
               <Button variant="ghost" onClick={() => setFollowupOpen(false)}>
-                <X className="h-4 w-4" />
+                <RiCloseLine className="h-4 w-4" />
               </Button>
             </div>
             <div className="mt-4 space-y-3">
               <Input type="datetime-local" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} />
               <Textarea value={followUpNote} onChange={(event) => setFollowUpNote(event.target.value)} placeholder="Follow-up note" />
               <Button className="w-full" onClick={saveFollowUp}>
-                <Save className="h-4 w-4" />
+                <RiSaveLine className="h-4 w-4" />
                 Save follow-up
               </Button>
             </div>

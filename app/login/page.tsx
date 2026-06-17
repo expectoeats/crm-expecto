@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, KeyRound, X } from "lucide-react";
+import { RiArrowRightLine, RiKeyLine, RiCloseLine } from "react-icons/ri";
 import { Button, Card, Input } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { BrandMark } from "@/components/brand-mark";
@@ -89,7 +89,7 @@ export default function LoginPage() {
 
             <Button type="submit" className="h-12 w-full" disabled={loading}>
               {loading ? "Signing in..." : "Login"}
-              <ArrowRight className="h-4 w-4" />
+              <RiArrowRightLine className="h-4 w-4" />
             </Button>
             <Button type="button" variant="ghost" className="h-11 w-full" onClick={() => {
               setForgotEmail(email);
@@ -97,7 +97,7 @@ export default function LoginPage() {
               setForgotError("");
               setShowForgotPassword(true);
             }}>
-              <KeyRound className="h-4 w-4" />
+              <RiKeyLine className="h-4 w-4" />
               Forgot password
             </Button>
           </form>
@@ -114,7 +114,7 @@ export default function LoginPage() {
                 <p className="mt-1 text-sm text-slate-600">Admin ko reset request bhej di jayegi.</p>
               </div>
               <Button variant="ghost" onClick={() => setShowForgotPassword(false)}>
-                <X className="h-4 w-4" />
+                <RiCloseLine className="h-4 w-4" />
               </Button>
             </div>
             <form className="mt-4 space-y-3" onSubmit={handleForgotPassword}>

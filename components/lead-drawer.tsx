@@ -3,9 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import {
-  CalendarDays, Check, Copy, Edit2, ExternalLink, MessageCircle,
-  Pencil, PhoneCall, Save, Star, X, MapPin, Globe, Hash,
-} from "lucide-react";
+  RiCalendarLine,
+  RiCheckLine,
+  RiFileCopyLine,
+  RiEditLine,
+  RiExternalLinkLine,
+  RiWhatsappLine,
+  RiEditBoxLine,
+  RiPhoneLine,
+  RiSaveLine,
+  RiStarFill,
+  RiCloseLine,
+  RiMapPinLine,
+  RiGlobeLine,
+  RiHashtag,
+} from "react-icons/ri";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 import { NicheBadge, WebsiteStatusBadge } from "@/components/badges";
 import { apiFetch } from "@/lib/http";
@@ -177,7 +189,7 @@ export function LeadDrawer({
             onClick={onClose}
             className="ml-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200"
           >
-            <X className="h-4 w-4" />
+            <RiCloseLine className="h-4 w-4" />
           </button>
         </div>
 
@@ -201,27 +213,27 @@ export function LeadDrawer({
                   <WebsiteStatusBadge websiteStatus={lead.websiteStatus ?? "no_website"} />
                   {lead.rating != null ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
-                      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                      <RiStarFill className="h-3 w-3 text-amber-400" />
                       {lead.rating}
                       {lead.reviewCount != null ? ` (${lead.reviewCount})` : ""}
                     </span>
                   ) : null}
                   {lead.score != null ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-200">
-                      <Hash className="h-3 w-3" />
+                      <RiHashtag className="h-3 w-3" />
                       Score {lead.score}
                     </span>
                   ) : null}
                 </div>
 
                 <div className="space-y-2 rounded-2xl bg-slate-50 p-3">
-                  <InfoRow icon={<PhoneCall className="h-3.5 w-3.5" />} label={lead.phone} />
-                  {lead.city ? <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={lead.city} /> : null}
+                  <InfoRow icon={<RiPhoneLine className="h-3.5 w-3.5" />} label={lead.phone} />
+                  {lead.city ? <InfoRow icon={<RiMapPinLine className="h-3.5 w-3.5" />} label={lead.city} /> : null}
                   {lead.websiteUrl ? (
                     <a href={lead.websiteUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs text-blue-600 hover:underline">
-                      <Globe className="h-3.5 w-3.5" />
+                      <RiGlobeLine className="h-3.5 w-3.5" />
                       {lead.websiteUrl}
-                      <ExternalLink className="h-3 w-3" />
+                      <RiExternalLinkLine className="h-3 w-3" />
                     </a>
                   ) : null}
                 </div>
@@ -232,7 +244,7 @@ export function LeadDrawer({
                     href={`tel:${lead.phone}`}
                     className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-semibold text-white active:scale-[0.97]"
                   >
-                    <PhoneCall className="h-4 w-4" />
+                    <RiPhoneLine className="h-4 w-4" />
                     Call
                   </a>
                   <a
@@ -241,7 +253,7 @@ export function LeadDrawer({
                     rel="noopener noreferrer"
                     className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#25D366] text-sm font-semibold text-white active:scale-[0.97]"
                   >
-                    <MessageCircle className="h-4 w-4" />
+                    <RiWhatsappLine className="h-4 w-4" />
                     WhatsApp
                   </a>
                 </div>
@@ -259,14 +271,14 @@ export function LeadDrawer({
                             onClick={copyPitch}
                             className="flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200"
                           >
-                            {pitchCopied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                            {pitchCopied ? <RiCheckLine className="h-3 w-3 text-emerald-500" /> : <RiFileCopyLine className="h-3 w-3" />}
                             {pitchCopied ? "Copied" : "Copy"}
                           </button>
                           <button
                             onClick={() => { setEditingPitch(true); setPitchText(lead.pitchMessage ?? ""); }}
                             className="flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200"
                           >
-                            <Edit2 className="h-3 w-3" />
+                            <RiEditLine className="h-3 w-3" />
                             Edit
                           </button>
                         </>
@@ -282,7 +294,7 @@ export function LeadDrawer({
                             onClick={savePitch}
                             className="flex items-center gap-1 rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-white"
                           >
-                            <Save className="h-3 w-3" />
+                            <RiSaveLine className="h-3 w-3" />
                             Save
                           </button>
                         </>
@@ -331,7 +343,9 @@ export function LeadDrawer({
                                   ? "bg-[#25D366]/10 text-[#1a9e4a]"
                                   : "bg-emerald-50 text-emerald-700"
                               )}>
-                                {entry.action === "whatsapped" ? <MessageCircle className="h-2.5 w-2.5" /> : <PhoneCall className="h-2.5 w-2.5" />}
+                                {entry.action === "whatsapped"
+                                  ? <RiWhatsappLine className="h-2.5 w-2.5" />
+                                  : <RiPhoneLine className="h-2.5 w-2.5" />}
                                 {entry.action === "whatsapped" ? "WhatsApp" : "Called"}
                               </span>
                             </div>
@@ -347,11 +361,11 @@ export function LeadDrawer({
                     ))}
                     {/* Lead added entry */}
                     <div className="relative flex gap-3 pb-0">
-                      <div className="relative z-10 mt-1 h-3.5 w-3.5 shrink-0 rounded-full bg-slate-300 ring-2 ring-white" />
-                      <div>
-                        <p className="text-xs font-semibold text-slate-500">Lead Added</p>
-                        <p className="text-[11px] text-slate-400">{formatReadableDateTime(lead.createdAt)}</p>
-                      </div>
+                    <div className="relative z-10 mt-1 h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-white bg-slate-300" />
+                        <div>
+                          <p className="text-xs font-semibold text-slate-500">Lead Added</p>
+                          <p className="text-[11px] text-slate-400">{formatReadableDateTime(lead.createdAt)}</p>
+                        </div>
                     </div>
                   </div>
                 )}
@@ -363,7 +377,7 @@ export function LeadDrawer({
                 <div className="rounded-2xl bg-slate-50 p-3">
                   {lead.followUpDate ? (
                     <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <CalendarDays className="h-4 w-4 text-orange-500" />
+                      <RiCalendarLine className="h-4 w-4 text-orange-500" />
                       Follow up on: {formatReadableDate(lead.followUpDate)}
                     </p>
                   ) : (
@@ -394,10 +408,8 @@ export function LeadDrawer({
                       const next = !customStatusMode;
                       setCustomStatusMode(next);
                       if (next) {
-                        // Pre-fill custom input with current label if it's a known status
                         setCustomStatusText(cfg?.label ?? status ?? "");
                       } else {
-                        // Revert dropdown to nearest known status or "new"
                         const known = ALL_STATUSES.some((s) => s.value === lead?.status);
                         setStatus(known ? (lead?.status ?? "new") : "new");
                       }
@@ -409,7 +421,7 @@ export function LeadDrawer({
                         : "bg-slate-100 text-slate-600 ring-slate-200 hover:bg-slate-200"
                     )}
                   >
-                    <Pencil className="h-3 w-3" />
+                    <RiEditBoxLine className="h-3 w-3" />
                     {customStatusMode ? "Custom mode on" : "Custom"}
                   </button>
                 </div>
@@ -421,7 +433,7 @@ export function LeadDrawer({
                   </div>
                 ) : lead?.status ? (
                   <div className="flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-sm font-semibold ring-1 ring-violet-200 text-violet-700">
-                    <Pencil className="h-3.5 w-3.5" />
+                    <RiEditBoxLine className="h-3.5 w-3.5" />
                     {lead.status}
                   </div>
                 ) : null}

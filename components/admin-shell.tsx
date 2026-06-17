@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import useSWR from "swr";
-import { LayoutDashboard, LogOut, Users, PlusCircle, ListChecks } from "lucide-react";
+import { RiDashboardLine, RiLogoutBoxLine, RiGroupLine, RiAddCircleLine, RiListCheck3 } from "react-icons/ri";
 import { Button, Card } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { cn } from "@/lib/ui";
@@ -12,10 +12,10 @@ import { BrandMark } from "@/components/brand-mark";
 import { InstallAppButton } from "@/components/install-app-button";
 
 const navItems = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/leads", label: "Leads", icon: ListChecks },
-  { href: "/admin/leads/new", label: "Add Lead", icon: PlusCircle },
-  { href: "/admin/employees", label: "Employees", icon: Users },
+  { href: "/admin/dashboard", label: "Dashboard", icon: RiDashboardLine },
+  { href: "/admin/leads", label: "Leads", icon: RiListCheck3 },
+  { href: "/admin/leads/new", label: "Add Lead", icon: RiAddCircleLine },
+  { href: "/admin/employees", label: "Employees", icon: RiGroupLine },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -86,7 +86,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <InstallAppButton />
           </div>
           <Button className="mt-4 w-full" variant="secondary" onClick={handleLogout}>
-            <LogOut className="h-4 w-4" />
+            <RiLogoutBoxLine className="h-4 w-4" />
             Logout
           </Button>
         </Card>
@@ -99,7 +99,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-2">
               <InstallAppButton compact />
               <Button variant="secondary" onClick={handleLogout}>
-                <LogOut className="h-4 w-4" />
+                <RiLogoutBoxLine className="h-4 w-4" />
               </Button>
             </div>
           </div>

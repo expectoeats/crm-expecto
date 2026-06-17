@@ -42,6 +42,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Expecto CRM" />
+        <link rel="apple-touch-icon" href="/img/logo.png" />
+      </head>
       <body className="min-h-full bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.16),_transparent_32%),radial-gradient(circle_at_20%_20%,_rgba(249,115,22,0.08),_transparent_22%),linear-gradient(180deg,_#fafafa_0%,_#f1f5f9_100%)] text-slate-900">
         <PwaRegister />
         {children}

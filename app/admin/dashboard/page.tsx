@@ -6,10 +6,27 @@ import {
   BarChart, Bar, Cell, PieChart, Pie, ResponsiveContainer, Tooltip, XAxis, YAxis, LineChart, Line, CartesianGrid, Legend,
 } from "recharts";
 import {
-  Users, TrendingUp, PhoneCall, MessageCircle, Flame, CheckCircle,
-  Clock, XCircle, RefreshCw, Send, Zap, ThumbsDown, Circle,
-  Phone, Plus, Shuffle, ArrowRight, Activity, Target, Award, AlertCircle,
-} from "lucide-react";
+  RiGroupLine,
+  RiLineChartLine,
+  RiPhoneLine,
+  RiMessageLine,
+  RiFireLine,
+  RiCheckboxCircleLine,
+  RiTimeLine,
+  RiCloseCircleLine,
+  RiRefreshLine,
+  RiSendPlaneLine,
+  RiFlashlightLine,
+  RiThumbDownLine,
+  RiCircleLine,
+  RiAddLine,
+  RiShuffleLine,
+  RiArrowRightLine,
+  RiPulseLine,
+  RiRoadMapLine,
+  RiAwardLine,
+  RiAlertLine,
+} from "react-icons/ri";
 import { Button, Card, EmptyState, SectionTitle, SkeletonCard } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { cn } from "@/lib/ui";
@@ -61,18 +78,18 @@ const employeesFetcher = async () =>
 // ─── Status display config ───────────────────────────────────────────────────
 
 const STATUS_META: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; ring: string }> = {
-  new:            { label: "New",           icon: <Circle className="h-4 w-4" />,       color: "text-slate-600",  bg: "bg-slate-50",    ring: "ring-slate-200" },
-  reached_out:    { label: "Reached Out",   icon: <Phone className="h-4 w-4" />,        color: "text-blue-700",   bg: "bg-blue-50",     ring: "ring-blue-200"  },
-  in_talks:       { label: "In Talks",      icon: <MessageCircle className="h-4 w-4" />,color: "text-yellow-700", bg: "bg-yellow-50",   ring: "ring-yellow-200"},
-  interested:     { label: "Interested",    icon: <Flame className="h-4 w-4" />,        color: "text-orange-700", bg: "bg-orange-50",   ring: "ring-orange-200"},
-  converted:      { label: "Converted",     icon: <CheckCircle className="h-4 w-4" />,  color: "text-emerald-700",bg: "bg-emerald-50",  ring: "ring-emerald-200"},
-  not_interested: { label: "Not Interested",icon: <XCircle className="h-4 w-4" />,      color: "text-red-700",    bg: "bg-red-50",      ring: "ring-red-200"   },
-  follow_up:      { label: "Follow Up",     icon: <Clock className="h-4 w-4" />,        color: "text-purple-700", bg: "bg-purple-50",   ring: "ring-purple-200"},
-  called:         { label: "Called",        icon: <PhoneCall className="h-4 w-4" />,    color: "text-blue-700",   bg: "bg-blue-50",     ring: "ring-blue-200"  },
-  callback:       { label: "Callback",      icon: <RefreshCw className="h-4 w-4" />,    color: "text-orange-700", bg: "bg-orange-50",   ring: "ring-orange-200"},
-  proposal_sent:  { label: "Proposal Sent", icon: <Send className="h-4 w-4" />,         color: "text-teal-700",   bg: "bg-teal-50",     ring: "ring-teal-200"  },
-  closed_won:     { label: "Closed Won",    icon: <Zap className="h-4 w-4" />,          color: "text-emerald-700",bg: "bg-emerald-50",  ring: "ring-emerald-200"},
-  closed_lost:    { label: "Closed Lost",   icon: <ThumbsDown className="h-4 w-4" />,   color: "text-red-700",    bg: "bg-red-50",      ring: "ring-red-200"   },
+  new:            { label: "New",           icon: <RiCircleLine className="h-4 w-4" />,          color: "text-slate-600",  bg: "bg-slate-50",    ring: "ring-slate-200" },
+  reached_out:    { label: "Reached Out",   icon: <RiPhoneLine className="h-4 w-4" />,           color: "text-blue-700",   bg: "bg-blue-50",     ring: "ring-blue-200"  },
+  in_talks:       { label: "In Talks",      icon: <RiMessageLine className="h-4 w-4" />,         color: "text-yellow-700", bg: "bg-yellow-50",   ring: "ring-yellow-200"},
+  interested:     { label: "Interested",    icon: <RiFireLine className="h-4 w-4" />,            color: "text-orange-700", bg: "bg-orange-50",   ring: "ring-orange-200"},
+  converted:      { label: "Converted",     icon: <RiCheckboxCircleLine className="h-4 w-4" />,  color: "text-emerald-700",bg: "bg-emerald-50",  ring: "ring-emerald-200"},
+  not_interested: { label: "Not Interested",icon: <RiCloseCircleLine className="h-4 w-4" />,     color: "text-red-700",    bg: "bg-red-50",      ring: "ring-red-200"   },
+  follow_up:      { label: "Follow Up",     icon: <RiTimeLine className="h-4 w-4" />,            color: "text-purple-700", bg: "bg-purple-50",   ring: "ring-purple-200"},
+  called:         { label: "Called",        icon: <RiPhoneLine className="h-4 w-4" />,           color: "text-blue-700",   bg: "bg-blue-50",     ring: "ring-blue-200"  },
+  callback:       { label: "Callback",      icon: <RiRefreshLine className="h-4 w-4" />,         color: "text-orange-700", bg: "bg-orange-50",   ring: "ring-orange-200"},
+  proposal_sent:  { label: "Proposal Sent", icon: <RiSendPlaneLine className="h-4 w-4" />,       color: "text-teal-700",   bg: "bg-teal-50",     ring: "ring-teal-200"  },
+  closed_won:     { label: "Closed Won",    icon: <RiFlashlightLine className="h-4 w-4" />,      color: "text-emerald-700",bg: "bg-emerald-50",  ring: "ring-emerald-200"},
+  closed_lost:    { label: "Closed Lost",   icon: <RiThumbDownLine className="h-4 w-4" />,       color: "text-red-700",    bg: "bg-red-50",      ring: "ring-red-200"   },
 };
 
 // Bar chart colors per status
@@ -115,7 +132,7 @@ function StatCard({
         <p className="mt-1 text-2xl font-bold leading-none text-slate-950">{value}</p>
         {sub ? <p className="mt-1 text-xs text-slate-400">{sub}</p> : null}
       </div>
-      {href ? <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-slate-600" /> : null}
+      {href ? <RiArrowRightLine className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-slate-600" /> : null}
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
@@ -174,7 +191,7 @@ function EmployeeTable({ employees, loading }: { employees: EmployeeStats[]; loa
         action={
           <Link href="/admin/employees">
             <Button>
-              <Users className="h-4 w-4" />
+              <RiGroupLine className="h-4 w-4" />
               Manage Employees
             </Button>
           </Link>
@@ -216,7 +233,7 @@ function EmployeeTable({ employees, loading }: { employees: EmployeeStats[]; loa
                     <div>
                       <div className="flex items-center gap-1.5">
                         <p className="font-semibold text-slate-950">{emp.name}</p>
-                        {isTop ? <Award className="h-3.5 w-3.5 text-amber-500" /> : null}
+                        {isTop ? <RiAwardLine className="h-3.5 w-3.5 text-amber-500" /> : null}
                       </div>
                       <p className="text-xs text-slate-400">{emp.email}</p>
                     </div>
@@ -404,7 +421,7 @@ export default function AdminDashboardPage() {
         <div className="flex shrink-0 gap-2">
           <Link href="/admin/leads/new">
             <Button variant="secondary">
-              <Plus className="h-4 w-4" />
+              <RiAddLine className="h-4 w-4" />
               <span className="hidden sm:inline">Add Lead</span>
             </Button>
           </Link>
@@ -412,7 +429,7 @@ export default function AdminDashboardPage() {
             await apiFetch("/leads/auto-assign", { method: "POST" });
             window.location.reload();
           }}>
-            <Shuffle className="h-4 w-4" />
+            <RiShuffleLine className="h-4 w-4" />
             <span className="hidden sm:inline">Auto-Assign</span>
           </Button>
         </div>
@@ -428,7 +445,7 @@ export default function AdminDashboardPage() {
           <StatCard
             label="Total Leads"
             value={summary?.totalLeads ?? 0}
-            icon={<Target className="h-5 w-5 text-white" />}
+            icon={<RiRoadMapLine className="h-5 w-5 text-white" />}
             color="bg-slate-950"
             sub={`${leadStats?.new_today ?? 0} added today`}
             href="/admin/leads"
@@ -436,7 +453,7 @@ export default function AdminDashboardPage() {
           <StatCard
             label="Contacted"
             value={leadStats?.contacted ?? 0}
-            icon={<PhoneCall className="h-5 w-5 text-white" />}
+            icon={<RiPhoneLine className="h-5 w-5 text-white" />}
             color="bg-blue-600"
             sub={`${summary?.totalLeads ? Math.round(((leadStats?.contacted ?? 0) / summary.totalLeads) * 100) : 0}% of total`}
             href="/admin/leads?status=reached_out"
@@ -444,7 +461,7 @@ export default function AdminDashboardPage() {
           <StatCard
             label="Hot Pipeline"
             value={leadStats?.interested ?? 0}
-            icon={<Flame className="h-5 w-5 text-white" />}
+            icon={<RiFireLine className="h-5 w-5 text-white" />}
             color="bg-orange-500"
             sub="Interested + In talks"
             href="/admin/leads?status=interested"
@@ -452,7 +469,7 @@ export default function AdminDashboardPage() {
           <StatCard
             label="Closed Won"
             value={summary?.closedWon ?? 0}
-            icon={<Zap className="h-5 w-5 text-white" />}
+            icon={<RiFlashlightLine className="h-5 w-5 text-white" />}
             color="bg-emerald-600"
             sub={`${summary?.conversionRate ?? 0}% conversion rate`}
             href="/admin/leads?status=closed_won"
@@ -490,7 +507,7 @@ export default function AdminDashboardPage() {
           <div className="glass-panel rounded-3xl p-5">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950">
-                <Users className="h-5 w-5 text-white" />
+                <RiGroupLine className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Active Team</p>
@@ -502,7 +519,7 @@ export default function AdminDashboardPage() {
           <div className="glass-panel rounded-3xl p-5">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600">
-                <Activity className="h-5 w-5 text-white" />
+                <RiPulseLine className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total Calls</p>
@@ -514,7 +531,7 @@ export default function AdminDashboardPage() {
           <div className="glass-panel rounded-3xl p-5">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-500">
-                <Flame className="h-5 w-5 text-white" />
+                <RiFireLine className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Team Interested</p>
@@ -527,7 +544,7 @@ export default function AdminDashboardPage() {
             <div className="glass-panel rounded-3xl p-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500">
-                  <Award className="h-5 w-5 text-white" />
+                  <RiAwardLine className="h-5 w-5 text-white" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Top Performer</p>
@@ -540,7 +557,7 @@ export default function AdminDashboardPage() {
             <div className="glass-panel rounded-3xl p-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600">
-                  <CheckCircle className="h-5 w-5 text-white" />
+                  <RiCheckboxCircleLine className="h-5 w-5 text-white" />
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total Closed</p>
@@ -678,7 +695,7 @@ export default function AdminDashboardPage() {
           action={
             <Link href="/admin/employees">
               <Button variant="secondary">
-                <Users className="h-4 w-4" />
+                <RiGroupLine className="h-4 w-4" />
                 <span className="hidden sm:inline">Manage</span>
               </Button>
             </Link>
@@ -692,7 +709,7 @@ export default function AdminDashboardPage() {
         <Link href="/admin/leads?status=follow_up">
           <div className="flex items-center gap-4 rounded-3xl bg-purple-50 px-5 py-4 ring-1 ring-purple-200 hover:shadow-sm transition">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-purple-500">
-              <AlertCircle className="h-5 w-5 text-white" />
+              <RiAlertLine className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1">
               <p className="text-sm font-bold text-purple-900">
@@ -700,7 +717,7 @@ export default function AdminDashboardPage() {
               </p>
               <p className="text-xs text-purple-600">Tap to view and action them before the day ends.</p>
             </div>
-            <ArrowRight className="h-4 w-4 text-purple-400" />
+            <RiArrowRightLine className="h-4 w-4 text-purple-400" />
           </div>
         </Link>
       ) : null}

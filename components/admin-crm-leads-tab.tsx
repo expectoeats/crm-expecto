@@ -3,12 +3,21 @@
 import { useState } from "react";
 import useSWR from "swr";
 import {
-  Clock, ExternalLink, MessageCircle, PhoneCall, Search, Sparkles, X, Filter,
-} from "lucide-react";
-import { EmptyState, Input, Select, SkeletonCard } from "@/components/ui";
+  RiTimeLine,
+  RiExternalLinkLine,
+  RiWhatsappLine,
+  RiPhoneLine,
+  RiSearchLine,
+  RiSparklingLine,
+  RiCloseLine,
+  RiEqualizerLine,
+} from "react-icons/ri";
+import { EmptyState, Input, SkeletonCard } from "@/components/ui";
 import { NicheBadge } from "@/components/badges";
 import { apiFetch } from "@/lib/http";
 import { cn } from "@/lib/ui";
+import { CallUpdateModal } from "@/components/call-update-modal";
+import type { LeadRecord } from "@/components/lead-utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -27,6 +36,9 @@ type CrmLead = {
   linked_website_lead_id?: { _id: string; name?: string } | string | null;
   followUpDate?: string;
   createdAt?: string;
+  // Fields needed for CallUpdateModal (LeadRecord compatible subset)
+  leadQuality?: string;
+  pitchMessage?: string;
 };
 
 type CrmLeadsResponse = {
@@ -59,6 +71,20 @@ function displayNiche(lead: CrmLead) {
 function getWhatsAppUrl(lead: CrmLead) {
   const number = (lead.whatsapp ?? lead.phone).replace(/\D/g, "");
   return `https://wa.me/${number}`;
+}
+
+// Cast CrmLead to a minimal LeadRecord shape for modal compatibility
+function toLeadRecord(lead: CrmLead): LeadRecord {
+  return {
+    _id: lead._id,
+    name: displayName(lead),
+    phone: lead.phone,
+    whatsapp: lead.whatsapp,
+    niche: displayNiche(lead),
+    leadQuality: lead.leadQuality ?? "warm",
+    status: lead.status,
+    pitchMessage: lead.pitchMessage,
+  };
 }
 
 // ─── Assign Dropdown ─────────────────────────────────────────────────────────
@@ -104,6 +130,8 @@ function AdminCrmLeadCard({ lead, employees, onMutate }: {
   lead: CrmLead; employees: Employee[]; onMutate: () => void;
 }) {
   const isBlocked = lead.status === "blocked_needs_website";
+  const [callModalOpen, setCallModalOpen] = useState(false);
+
   const linkedId =
     typeof lead.linked_website_lead_id === "object" && lead.linked_website_lead_id !== null
       ? lead.linked_website_lead_id._id
@@ -113,109 +141,126 @@ function AdminCrmLeadCard({ lead, employees, onMutate }: {
       ? lead.linked_website_lead_id.name
       : null;
 
+  function handleCallClick() {
+    if (isBlocked) return;
+    window.location.href = `tel:${lead.phone}`;
+    setCallModalOpen(true);
+  }
+
   return (
-    <div className={cn(
-      "overflow-hidden rounded-2xl bg-white ring-1 shadow-sm",
-      isBlocked ? "ring-amber-200" : "ring-slate-200"
-    )}>
-      <div className="p-4 space-y-3">
+    <>
+      <div className={cn(
+        "overflow-hidden rounded-2xl bg-white ring-1 shadow-sm",
+        isBlocked ? "ring-amber-200" : "ring-slate-200"
+      )}>
+        <div className="p-4 space-y-3">
 
-        {/* Blocked banner */}
-        {isBlocked ? (
-          <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 ring-1 ring-amber-200">
-            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-amber-800">
-                ⏳ Website deal in progress — CRM pitch unlocks automatically when website is delivered
-              </p>
-              {linkedId ? (
-                <a
-                  href={`/leads/${linkedId}`}
-                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900"
-                >
-                  View website lead {linkedName ? `(${linkedName})` : ""} →
-                  <ExternalLink className="h-2.5 w-2.5" />
-                </a>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Name + niche + score */}
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-bold text-slate-950">{displayName(lead)}</p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {lead.phone}{lead.city ? ` · ${lead.city}` : ""}
-            </p>
-          </div>
-          <NicheBadge niche={displayNiche(lead)} />
-          {lead.crm_lead_score != null ? (
-            <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-bold text-violet-700 ring-1 ring-violet-300">
-              Score {lead.crm_lead_score}
-            </span>
-          ) : null}
-        </div>
-
-        {/* Status badge */}
-        <div>
+          {/* Blocked banner */}
           {isBlocked ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-300">
-              <Clock className="h-3 w-3" />
-              Blocked · Awaiting Website
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-300">
-              <Sparkles className="h-3 w-3" />
-              {lead.status.replaceAll("_", " ")}
-            </span>
-          )}
+            <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 ring-1 ring-amber-200">
+              <RiTimeLine className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-amber-800">
+                  Website deal in progress — CRM pitch unlocks when website is delivered
+                </p>
+                {linkedId ? (
+                  <a
+                    href={`/leads/${linkedId}`}
+                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900"
+                  >
+                    View website lead {linkedName ? `(${linkedName})` : ""} →
+                    <RiExternalLinkLine className="h-2.5 w-2.5" />
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Name + niche + score */}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-bold text-slate-950">{displayName(lead)}</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {lead.phone}{lead.city ? ` · ${lead.city}` : ""}
+              </p>
+            </div>
+            <NicheBadge niche={displayNiche(lead)} />
+            {lead.crm_lead_score != null ? (
+              <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-bold text-violet-700 ring-1 ring-violet-300">
+                Score {lead.crm_lead_score}
+              </span>
+            ) : null}
+          </div>
+
+          {/* Status badge */}
+          <div>
+            {isBlocked ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-300">
+                <RiTimeLine className="h-3 w-3" />
+                Blocked · Awaiting Website
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-300">
+                <RiSparklingLine className="h-3 w-3" />
+                {lead.status.replaceAll("_", " ")}
+              </span>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleCallClick}
+              disabled={isBlocked}
+              className={cn(
+                "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition",
+                isBlocked
+                  ? "cursor-not-allowed bg-slate-100 text-slate-400 opacity-60"
+                  : "bg-emerald-500 text-white active:scale-[0.97] hover:bg-emerald-600"
+              )}
+            >
+              <RiPhoneLine className="h-4 w-4" />
+              Call
+            </button>
+            <a
+              href={isBlocked ? undefined : getWhatsAppUrl(lead)}
+              target={isBlocked ? undefined : "_blank"}
+              rel="noopener noreferrer"
+              className={cn(
+                "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition",
+                isBlocked
+                  ? "cursor-not-allowed bg-slate-100 text-slate-400 opacity-60"
+                  : "bg-[#25D366] text-white active:scale-[0.97] hover:bg-[#1fba58]"
+              )}
+              aria-disabled={isBlocked}
+              tabIndex={isBlocked ? -1 : 0}
+            >
+              <RiWhatsappLine className="h-4 w-4" />
+              WA
+            </a>
+          </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="grid grid-cols-2 gap-2">
-          <a
-            href={isBlocked ? undefined : `tel:${lead.phone}`}
-            className={cn(
-              "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition",
-              isBlocked
-                ? "cursor-not-allowed bg-slate-100 text-slate-400 opacity-60"
-                : "bg-emerald-500 text-white active:scale-[0.97] hover:bg-emerald-600"
-            )}
-            aria-disabled={isBlocked}
-            tabIndex={isBlocked ? -1 : 0}
-          >
-            <PhoneCall className="h-4 w-4" />
-            Call
-          </a>
-          <a
-            href={isBlocked ? undefined : getWhatsAppUrl(lead)}
-            target={isBlocked ? undefined : "_blank"}
-            rel="noopener noreferrer"
-            className={cn(
-              "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition",
-              isBlocked
-                ? "cursor-not-allowed bg-slate-100 text-slate-400 opacity-60"
-                : "bg-[#25D366] text-white active:scale-[0.97] hover:bg-[#1fba58]"
-            )}
-            aria-disabled={isBlocked}
-            tabIndex={isBlocked ? -1 : 0}
-          >
-            <MessageCircle className="h-4 w-4" />
-            WA
-          </a>
+        {/* Assign footer */}
+        <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-4 py-2.5">
+          <span className="shrink-0 text-[11px] font-semibold text-slate-400">Assign:</span>
+          <div className="flex-1">
+            <CrmAssignDropdown lead={lead} employees={employees} onAssigned={onMutate} />
+          </div>
+          <span className="shrink-0 text-[11px] text-slate-400">{lead.phone}</span>
         </div>
       </div>
 
-      {/* Assign footer */}
-      <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-4 py-2.5">
-        <span className="shrink-0 text-[11px] font-semibold text-slate-400">Assign:</span>
-        <div className="flex-1">
-          <CrmAssignDropdown lead={lead} employees={employees} onAssigned={onMutate} />
-        </div>
-        <span className="shrink-0 text-[11px] text-slate-400">{lead.phone}</span>
-      </div>
-    </div>
+      {!isBlocked ? (
+        <CallUpdateModal
+          lead={toLeadRecord(lead)}
+          open={callModalOpen}
+          onClose={() => setCallModalOpen(false)}
+          onSaved={async () => { onMutate(); }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -241,7 +286,6 @@ export function AdminCrmLeadsTab() {
       ? allLeads.filter((l) => l.status !== "blocked_needs_website")
       : allLeads;
 
-  // Count blocked for badge
   const blockedSwrKey = `/crm-leads?status=blocked_needs_website&limit=1`;
   const { data: blockedData } = useSWR(blockedSwrKey, crmFetcher, { revalidateOnFocus: false, dedupingInterval: 30_000 });
   const blockedCount = blockedData?.pagination.total ?? 0;
@@ -274,7 +318,7 @@ export function AdminCrmLeadsTab() {
             subTab === "active" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          <Sparkles className="h-4 w-4" />
+          <RiSparklingLine className="h-4 w-4" />
           Active CRM Leads
         </button>
         <button
@@ -284,7 +328,7 @@ export function AdminCrmLeadsTab() {
             subTab === "blocked" ? "bg-white text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          <Clock className="h-4 w-4" />
+          <RiTimeLine className="h-4 w-4" />
           Blocked
           {blockedCount > 0 ? (
             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-white">
@@ -296,7 +340,7 @@ export function AdminCrmLeadsTab() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <RiSearchLine className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <Input
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
@@ -309,7 +353,7 @@ export function AdminCrmLeadsTab() {
             onClick={clearSearch}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
           >
-            <X className="h-4 w-4" />
+            <RiCloseLine className="h-4 w-4" />
           </button>
         ) : null}
       </div>
@@ -317,7 +361,7 @@ export function AdminCrmLeadsTab() {
       {/* Count */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400" />
+          <RiEqualizerLine className="h-4 w-4 text-slate-400" />
           <span className="text-sm font-semibold text-slate-700">
             {subTab === "blocked" ? "Awaiting website delivery" : "CRM prospects"}
           </span>
@@ -329,11 +373,13 @@ export function AdminCrmLeadsTab() {
         ) : null}
       </div>
 
-      {/* Lead grid */}
+      {/* Lead grid — 2 columns on desktop */}
       {isLoading ? (
-        <div className="space-y-3"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <SkeletonCard /><SkeletonCard /><SkeletonCard />
+        </div>
       ) : displayLeads.length ? (
-        <div className="space-y-3 grid lg:grid-cols-2 md:grid-cols-2 sm:grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {displayLeads.map((lead) => (
             <AdminCrmLeadCard
               key={lead._id}

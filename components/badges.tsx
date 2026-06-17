@@ -1,27 +1,37 @@
 "use client";
 
 import {
-  CheckCircle, Flame, Globe, MessageCircle, Phone,
-  PhoneCall, RefreshCw, Send, Star, ThumbsDown, X,
-  Zap, Circle, Calendar, Clock,
-} from "lucide-react";
+  RiFireLine,
+  RiStarFill,
+  RiSnowflakeLine,
+  RiCircleLine,
+  RiPhoneLine,
+  RiMessageLine,
+  RiCheckboxCircleLine,
+  RiThumbDownLine,
+  RiCalendarLine,
+  RiRefreshLine,
+  RiSendPlaneLine,
+  RiFlashlightLine,
+  RiGlobeLine,
+  RiTimeLine,
+} from "react-icons/ri";
 import { Badge } from "@/components/ui";
 import { leadQualityStyles, statusConfig, websiteStatusLabels, cn } from "@/lib/ui";
 
-// Icon map for each status — no emojis
 const statusIcons: Record<string, React.ReactNode> = {
-  new:            <Circle className="h-3 w-3" />,
-  reached_out:    <Phone className="h-3 w-3" />,
-  in_talks:       <MessageCircle className="h-3 w-3" />,
-  interested:     <Flame className="h-3 w-3" />,
-  converted:      <CheckCircle className="h-3 w-3" />,
-  not_interested: <X className="h-3 w-3" />,
-  follow_up:      <Calendar className="h-3 w-3" />,
-  called:         <PhoneCall className="h-3 w-3" />,
-  callback:       <RefreshCw className="h-3 w-3" />,
-  proposal_sent:  <Send className="h-3 w-3" />,
-  closed_won:     <Zap className="h-3 w-3" />,
-  closed_lost:    <ThumbsDown className="h-3 w-3" />,
+  new:            <RiCircleLine className="h-3 w-3" />,
+  reached_out:    <RiPhoneLine className="h-3 w-3" />,
+  in_talks:       <RiMessageLine className="h-3 w-3" />,
+  interested:     <RiFireLine className="h-3 w-3" />,
+  converted:      <RiCheckboxCircleLine className="h-3 w-3" />,
+  not_interested: <RiThumbDownLine className="h-3 w-3" />,
+  follow_up:      <RiCalendarLine className="h-3 w-3" />,
+  called:         <RiPhoneLine className="h-3 w-3" />,
+  callback:       <RiRefreshLine className="h-3 w-3" />,
+  proposal_sent:  <RiSendPlaneLine className="h-3 w-3" />,
+  closed_won:     <RiFlashlightLine className="h-3 w-3" />,
+  closed_lost:    <RiThumbDownLine className="h-3 w-3" />,
 };
 
 export function StatusBadge({ status }: { status: string }) {
@@ -48,9 +58,9 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 const qualityIcons: Record<string, React.ReactNode> = {
-  hot:  <Flame className="h-3 w-3" />,
-  warm: <Star  className="h-3 w-3 fill-current" />,
-  cold: <Clock className="h-3 w-3" />,
+  hot:  <RiFireLine className="h-3 w-3" />,
+  warm: <RiStarFill className="h-3 w-3" />,
+  cold: <RiSnowflakeLine className="h-3 w-3" />,
 };
 
 const qualityLabels: Record<string, string> = {
@@ -85,7 +95,7 @@ export function WebsiteStatusBadge({ websiteStatus }: { websiteStatus: string })
         : "bg-emerald-100 text-emerald-700 ring-emerald-200";
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", cls)}>
-      <Globe className="h-3 w-3" />
+      <RiGlobeLine className="h-3 w-3" />
       {websiteStatusLabels[websiteStatus] ?? websiteStatus}
     </span>
   );
@@ -98,10 +108,17 @@ export function TierBadge({ tier, label }: { tier?: string; label?: string }) {
     warm: "bg-amber-100 text-amber-700 ring-amber-300",
     cold: "bg-slate-100 text-slate-500 ring-slate-200",
   };
-  const cls = styles[tier] ?? "bg-slate-100 text-slate-500 ring-slate-200";
-  const text = label ?? (tier === "hot" ? "🔥 Hot" : tier === "warm" ? "⚡ Warm" : "🧊 Cold");
+  const icons: Record<string, React.ReactNode> = {
+    hot:  <RiFireLine className="h-3 w-3" />,
+    warm: <RiStarFill className="h-3 w-3" />,
+    cold: <RiSnowflakeLine className="h-3 w-3" />,
+  };
+  const cls  = styles[tier] ?? "bg-slate-100 text-slate-500 ring-slate-200";
+  const icon = icons[tier];
+  const text = label ?? (tier === "hot" ? "Hot" : tier === "warm" ? "Warm" : "Cold");
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset", cls)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset", cls)}>
+      {icon}
       {text}
     </span>
   );

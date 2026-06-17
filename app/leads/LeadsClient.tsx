@@ -4,8 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import {
-  Bell, CheckCircle2, Clock, Filter, Inbox, Search, Sparkles, TrendingUp, Globe, ShoppingCart,
-} from "lucide-react";
+  RiBellLine,
+  RiCheckboxCircleLine,
+  RiTimeLine,
+  RiEqualizerLine,
+  RiInboxLine,
+  RiSearchLine,
+  RiSparklingLine,
+  RiLineChartLine,
+  RiGlobeLine,
+  RiShoppingCartLine,
+  RiFireLine,
+  RiStarFill,
+  RiSnowflakeLine,
+  RiCalendarTodoLine,
+} from "react-icons/ri";
 import { EmployeeShell } from "@/components/employee-shell";
 import { EmptyState, Input, SkeletonCard } from "@/components/ui";
 import { LeadCard, type LeadRecord } from "@/components/lead-utils";
@@ -27,7 +40,7 @@ function startOfIstDate(value: Date) {
   return value.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
-type Tab = "active" | "contacted";
+type Tab = "active" | "contacted" | "followup";
 type TierFilter = "all" | "hot" | "warm" | "cold";
 type SortOption = "priority_score" | "rating" | "review_count" | "newest";
 type Pipeline = "website" | "crm";
@@ -64,7 +77,6 @@ export default function LeadsClient({
   const { data: stats, mutate: mutateStats } = useSWR("/leads/stats", statsFetcher);
   const { data: currentUser } = useSWR("employee-me", meFetcher);
 
-  // 15-second polling for real-time updates
   const poll = useCallback(async () => {
     try {
       const res = await apiFetch<{ leads: LeadRecord[] }>(
@@ -83,7 +95,7 @@ export default function LeadsClient({
     return () => clearInterval(interval);
   }, [poll]);
 
-  const { activeLeads, contactedLeads } = useMemo(() => {
+  const { activeLeads, contactedLeads, followupLeads } = useMemo(() => {
     const today = startOfIstDate(new Date());
     const all = leads ?? [];
 
@@ -92,7 +104,6 @@ export default function LeadsClient({
         if (sortOption === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
         if (sortOption === "review_count") return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
         if (sortOption === "newest") return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
-        // default: priority_score
         return (b.priority_score ?? b.score ?? 0) - (a.priority_score ?? a.score ?? 0);
       });
     }
@@ -128,14 +139,21 @@ export default function LeadsClient({
         const q = debouncedSearch.trim().toLowerCase();
         return !q || `${l.name} ${l.phone} ${l.ownerName ?? ""}`.toLowerCase().includes(q);
       })
-      .sort((a, b) =>
-        new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
-      );
+      .sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime());
 
-    return { activeLeads: active, contactedLeads: contacted };
+    // Today's follow-ups — across ALL leads (active + contacted)
+    const followup = all
+      .filter((l) => l.followUpDate && startOfIstDate(new Date(l.followUpDate)) === today)
+      .filter((l) => {
+        const q = debouncedSearch.trim().toLowerCase();
+        return !q || `${l.name} ${l.phone} ${l.ownerName ?? ""}`.toLowerCase().includes(q);
+      })
+      .sort((a, b) => new Date(a.followUpDate ?? 0).getTime() - new Date(b.followUpDate ?? 0).getTime());
+
+    return { activeLeads: active, contactedLeads: contacted, followupLeads: followup };
   }, [leads, debouncedSearch, followupOnly, activeStatFilter, tierFilter, sortOption]);
 
-  const currentLeads = tab === "active" ? activeLeads : contactedLeads;
+  const currentLeads = tab === "active" ? activeLeads : tab === "followup" ? followupLeads : contactedLeads;
   const followUpsToday = stats?.follow_ups_today ?? 0;
 
   function handleStatClick(filter: string) {
@@ -144,6 +162,13 @@ export default function LeadsClient({
     setTab("active");
     setActiveStatFilter(activeStatFilter === filter ? null : filter);
   }
+
+  const tierOptions: { key: TierFilter; label: string; icon: React.ReactNode }[] = [
+    { key: "all",  label: "All",  icon: null },
+    { key: "hot",  label: "Hot",  icon: <RiFireLine className="h-3.5 w-3.5" /> },
+    { key: "warm", label: "Warm", icon: <RiStarFill className="h-3.5 w-3.5" /> },
+    { key: "cold", label: "Cold", icon: <RiSnowflakeLine className="h-3.5 w-3.5" /> },
+  ];
 
   return (
     <EmployeeShell followUpCount={followUpsToday}>
@@ -158,7 +183,7 @@ export default function LeadsClient({
               pipeline === "website" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            <Globe className="h-4 w-4" />
+            <RiGlobeLine className="h-4 w-4" />
             Website Leads
           </button>
           <button
@@ -168,7 +193,7 @@ export default function LeadsClient({
               pipeline === "crm" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            <ShoppingCart className="h-4 w-4" />
+            <RiShoppingCartLine className="h-4 w-4" />
             CRM Leads
           </button>
         </div>
@@ -178,199 +203,174 @@ export default function LeadsClient({
           <CrmLeadsTab />
         ) : (
 
-        /* WEBSITE PIPELINE — existing UI below */
+        /* WEBSITE PIPELINE */
         <div className="space-y-4">
 
-        {/* STATS BAR */}
-        {stats ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <StatPill
-              label="Total"
-              value={stats.total}
-              active={false}
-              onClick={() => { setTab("active"); setActiveStatFilter(null); }}
-              color="text-slate-700"
-            />
-            <StatPill
-              label="New Today"
-              value={stats.new_today}
-              active={activeStatFilter === "new_today"}
-              onClick={() => handleStatClick("new_today")}
-              color="text-blue-700"
-            />
-            <StatPill
-              label="Contacted"
-              value={stats.contacted}
-              active={tab === "contacted" && !activeStatFilter}
-              onClick={() => handleStatClick("contacted")}
-              color="text-emerald-700"
-            />
-            <StatPill
-              label="Interested"
-              value={stats.interested}
-              active={false}
-              onClick={() => handleStatClick("interested")}
-              color="text-orange-700"
+          {/* STATS BAR */}
+          {stats ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <StatPill label="Total" value={stats.total} active={false}
+                onClick={() => { setTab("active"); setActiveStatFilter(null); }} color="text-slate-700" />
+              <StatPill label="New Today" value={stats.new_today}
+                active={activeStatFilter === "new_today"}
+                onClick={() => handleStatClick("new_today")} color="text-blue-700" />
+              <StatPill label="Contacted" value={stats.contacted}
+                active={tab === "contacted" && !activeStatFilter}
+                onClick={() => handleStatClick("contacted")} color="text-emerald-700" />
+              <StatPill label="Interested" value={stats.interested}
+                active={false} onClick={() => handleStatClick("interested")} color="text-orange-700" />
+            </div>
+          ) : null}
+
+          {/* Follow-up today banner — tapping goes to Follow-ups tab */}
+          {followUpsToday > 0 && tab !== "followup" ? (
+            <button
+              type="button"
+              onClick={() => setTab("followup")}
+              className="flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-left text-white shadow-sm"
+            >
+              <RiCalendarTodoLine className="h-5 w-5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-bold">
+                  {followUpsToday} Follow-up{followUpsToday !== 1 ? "s" : ""} Today
+                </p>
+                <p className="text-xs text-white/80">Tap to see today's follow-ups</p>
+              </div>
+            </button>
+          ) : null}
+
+          {/* Search */}
+          <div className="relative">
+            <RiSearchLine className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or phone…"
+              className="pl-11"
             />
           </div>
-        ) : null}
 
-        {/* Follow-up today banner */}
-        {followUpsToday > 0 ? (
-          <button
-            type="button"
-            onClick={() => { setFollowupOnly(true); setTab("active"); router.replace("/leads?followup=today"); }}
-            className="flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-500 to-violet-600 px-4 py-3 text-left text-white shadow-sm"
-          >
-            <Bell className="h-5 w-5 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-bold">
-                {followUpsToday} Follow-up{followUpsToday !== 1 ? "s" : ""} Today
-              </p>
-              <p className="text-xs text-white/80">Tap to see follow-ups</p>
-            </div>
-          </button>
-        ) : null}
+          {/* TIER FILTER BUTTONS + SORT */}
+          {tab === "active" ? (
+            <div className="space-y-2">
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                {tierOptions.map(({ key, label, icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setTierFilter(key)}
+                    className={`shrink-0 inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-xs font-bold transition ${
+                      tierFilter === key
+                        ? key === "hot"   ? "bg-red-500 text-white shadow-sm"
+                        : key === "warm"  ? "bg-amber-400 text-white shadow-sm"
+                        : key === "cold"  ? "bg-slate-400 text-white shadow-sm"
+                        :                   "bg-slate-950 text-white shadow-sm"
+                        : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or phone…"
-            className="pl-11"
-          />
-        </div>
-
-        {/* TIER FILTER BUTTONS + SORT */}
-        {tab === "active" ? (
-          <div className="space-y-2">
-            {/* Tier filter row */}
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-              {(
-                [
-                  { key: "all", label: "📋 All" },
-                  { key: "hot", label: "🔥 Hot" },
-                  { key: "warm", label: "⚡ Warm" },
-                  { key: "cold", label: "🧊 Cold" },
-                ] as { key: TierFilter; label: string }[]
-              ).map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTierFilter(key)}
-                  className={`shrink-0 rounded-2xl px-4 py-2 text-xs font-bold transition ${
-                    tierFilter === key
-                      ? key === "hot"
-                        ? "bg-red-500 text-white shadow-sm"
-                        : key === "warm"
-                        ? "bg-amber-400 text-white shadow-sm"
-                        : key === "cold"
-                        ? "bg-slate-400 text-white shadow-sm"
-                        : "bg-slate-950 text-white shadow-sm"
-                      : "bg-white text-slate-600 ring-1 ring-slate-200"
-                  }`}
+              <div className="flex items-center gap-2">
+                <RiLineChartLine className="h-4 w-4 shrink-0 text-slate-400" />
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value as SortOption)}
+                  className="w-auto max-w-[220px] rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400"
                 >
-                  {label}
-                </button>
+                  <option value="priority_score">Score (Best First)</option>
+                  <option value="rating">Best Rating</option>
+                  <option value="review_count">Most Reviews</option>
+                  <option value="newest">Newest First</option>
+                </select>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Tabs — 3 tabs: Active, Contacted, Follow-ups */}
+          <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
+            <TabButton active={tab === "active"} onClick={() => setTab("active")}
+              icon={<RiSparklingLine className="h-4 w-4" />} label="Active"
+              count={isLoading ? null : activeLeads.length} countColor="bg-emerald-500" />
+            <TabButton active={tab === "followup"} onClick={() => setTab("followup")}
+              icon={<RiCalendarTodoLine className="h-4 w-4" />} label="Follow-ups"
+              count={isLoading ? null : followupLeads.length}
+              countColor={followupLeads.length > 0 ? "bg-orange-500" : "bg-slate-400"} />
+            <TabButton active={tab === "contacted"} onClick={() => setTab("contacted")}
+              icon={<RiCheckboxCircleLine className="h-4 w-4" />} label="Contacted"
+              count={isLoading ? null : contactedLeads.length} countColor="bg-slate-400" />
+          </div>
+
+          {/* Follow-up filter toggle — only on active tab */}
+          {tab === "active" && followupOnly ? (
+            <button
+              type="button"
+              onClick={() => { setFollowupOnly(false); router.replace("/leads"); }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-500 px-4 py-3 text-sm font-semibold text-white transition"
+            >
+              <RiTimeLine className="h-4 w-4" />
+              Showing follow-ups only
+              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold">tap to clear</span>
+            </button>
+          ) : null}
+
+          {/* Header count */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              {tab === "active"
+                ? <><RiInboxLine className="h-4 w-4 text-slate-400" /><span className="text-sm font-semibold text-slate-700">Fresh leads to contact</span></>
+                : tab === "followup"
+                ? <><RiCalendarTodoLine className="h-4 w-4 text-orange-400" /><span className="text-sm font-semibold text-slate-700">Today&apos;s follow-ups</span></>
+                : <><RiCheckboxCircleLine className="h-4 w-4 text-slate-400" /><span className="text-sm font-semibold text-slate-700">Contact history</span></>
+              }
+            </div>
+            {!isLoading ? (
+              <span className="text-xs text-slate-400">{currentLeads.length} lead{currentLeads.length !== 1 ? "s" : ""}</span>
+            ) : null}
+          </div>
+
+          {/* Lead list — 2 col on desktop */}
+          {isLoading ? (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <SkeletonCard /><SkeletonCard /><SkeletonCard />
+            </div>
+          ) : currentLeads.length ? (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {currentLeads.map((lead) => (
+                <LeadCard
+                  key={lead._id}
+                  lead={lead}
+                  onViewDetails={setDrawerLeadId}
+                  currentUser={currentUser ?? undefined}
+                />
               ))}
             </div>
-
-            {/* Sort dropdown */}
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 shrink-0 text-slate-400" />
-              <select
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value as SortOption)}
-                className="flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400"
-              >
-                <option value="priority_score">🏆 Score (Best First)</option>
-                <option value="rating">⭐ Best Rating</option>
-                <option value="review_count">💬 Most Reviews</option>
-                <option value="newest">🕐 Newest First</option>
-              </select>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Tabs */}
-        <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
-          <TabButton active={tab === "active"} onClick={() => setTab("active")}
-            icon={<Sparkles className="h-4 w-4" />} label="Active"
-            count={isLoading ? null : activeLeads.length} countColor="bg-emerald-500" />
-          <TabButton active={tab === "contacted"} onClick={() => setTab("contacted")}
-            icon={<CheckCircle2 className="h-4 w-4" />} label="Contacted"
-            count={isLoading ? null : contactedLeads.length} countColor="bg-slate-400" />
+          ) : tab === "followup" ? (
+            <EmptyState
+              title="No follow-ups today"
+              description="No leads have a follow-up scheduled for today. Great work!"
+            />
+          ) : tab === "active" ? (
+            <EmptyState
+              title="No active leads"
+              description="All leads contacted! Check the Contacted tab."
+            />
+          ) : (
+            <EmptyState title="No contacted leads yet" description="Call or WhatsApp a lead to see history here." />
+          )}
         </div>
-
-        {/* Follow-up filter */}
-        {tab === "active" ? (
-          <button
-            type="button"
-            onClick={() => { setFollowupOnly((v) => !v); router.replace(followupOnly ? "/leads" : "/leads?followup=today"); }}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-              followupOnly ? "bg-purple-500 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
-            }`}
-          >
-            {followupOnly ? <Clock className="h-4 w-4" /> : <Filter className="h-4 w-4" />}
-            {followupOnly ? "Showing follow-ups only" : "Filter: today's follow-ups"}
-            {followupOnly && followUpsToday > 0 ? (
-              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold">{followUpsToday}</span>
-            ) : null}
-          </button>
-        ) : null}
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2">
-            {tab === "active"
-              ? <><Inbox className="h-4 w-4 text-slate-400" /><span className="text-sm font-semibold text-slate-700">Fresh leads to contact</span></>
-              : <><CheckCircle2 className="h-4 w-4 text-slate-400" /><span className="text-sm font-semibold text-slate-700">Contact history</span></>
-            }
-          </div>
-          {!isLoading ? (
-            <span className="text-xs text-slate-400">{currentLeads.length} lead{currentLeads.length !== 1 ? "s" : ""}</span>
-          ) : null}
-        </div>
-
-        {/* Lead list */}
-        {isLoading ? (
-          <div className="space-y-3"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
-        ) : currentLeads.length ? (
-          <div className="space-y-3 grid lg:grid-cols-2 md:grid-cols-2 sm:grid-cols-1 gap-3" >
-            {currentLeads.map((lead) => (
-              <LeadCard
-                key={lead._id}
-                lead={lead}
-                onViewDetails={setDrawerLeadId}
-                currentUser={currentUser ?? undefined}
-              />
-            ))}
-          </div>
-        ) : tab === "active" ? (
-          <EmptyState
-            title="No active leads"
-            description={followupOnly ? "No follow-ups for today." : "All leads contacted! Check Contacted tab."}
-            action={followupOnly ? (
-              <button type="button" onClick={() => setFollowupOnly(false)}
-                className="text-sm font-semibold text-slate-700 underline underline-offset-4">
-                Show all active leads
-              </button>
-            ) : undefined}
-          />
-        ) : (
-          <EmptyState title="No contacted leads yet" description="Call or WhatsApp a lead to see history here." />
         )}
-        </div> {/* end website pipeline space-y-4 */}
-        )} {/* end pipeline === "crm" ? ... : ... */}
 
-      {/* Lead drawer — shown for website pipeline only */}
-      <LeadDrawer
-        leadId={drawerLeadId}
-        onClose={() => setDrawerLeadId(null)}
-        onUpdated={() => { mutate(); mutateStats(); }}
-      />
+        {/* Lead drawer */}
+        <LeadDrawer
+          leadId={drawerLeadId}
+          onClose={() => setDrawerLeadId(null)}
+          onUpdated={() => { mutate(); mutateStats(); }}
+        />
+      </div>
     </EmployeeShell>
   );
 }
