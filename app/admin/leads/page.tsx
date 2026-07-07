@@ -26,10 +26,13 @@ import {
   RiTimeLine,
   RiEyeLine,
   RiDeleteBin6Line,
+  RiBarChartLine,
 } from "react-icons/ri";
 import { Card, EmptyState, Input, Select, SectionTitle, Button, SkeletonCard } from "@/components/ui";
 import { LeadQualityBadge, NicheBadge, TierBadge } from "@/components/badges";
 import { type LeadRecord } from "@/components/lead-utils";
+import { getLastContactInfo } from "@/components/lead-utils";
+import { formatReadableDateTime } from "@/lib/time";
 import { LeadDrawer } from "@/components/lead-drawer";
 import { AdminCrmLeadsTab } from "@/components/admin-crm-leads-tab";
 import { CallUpdateModal } from "@/components/call-update-modal";
@@ -731,8 +734,9 @@ function LeadCardAdmin({
   onDelete: (id: string) => void;
 }) {
   const cfg = statusConfig[lead.status];
-  const lastContact = (lead as LeadRecord & { last_contacted_by?: string; last_action?: string }).last_contacted_by;
-  const lastAction  = (lead as LeadRecord & { last_contacted_by?: string; last_action?: string }).last_action;
+  const lc = getLastContactInfo(lead);
+  const lastContact = lc ? (lc.by ?? null) : null;
+  const lastAction = lc ? (lc.action ?? null) : null;
   const [callModalOpen, setCallModalOpen] = useState(false);
 
   function handleCallClick() {
@@ -792,7 +796,7 @@ function LeadCardAdmin({
             </div>
           </div>
 
-          {/* ROW 2 — niche + tier + status badges */}
+          {/* ROW 2 — niche + tier + status + score badges */}
           <div className="flex flex-wrap items-center gap-1.5">
             <NicheBadge niche={lead.niche} />
             {lead.tier ? <TierBadge tier={lead.tier} label={lead.tierLabel} /> : null}
@@ -801,12 +805,26 @@ function LeadCardAdmin({
                 {cfg.label}
               </span>
             ) : null}
-            {lastContact ? (
+            {/* Scraper score badge */}
+            {(lead.leadScore ?? lead.score) != null ? (
+              <span className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset",
+                (lead.leadScore ?? lead.score ?? 0) >= 80
+                  ? "bg-red-50 text-red-700 ring-red-200"
+                  : (lead.leadScore ?? lead.score ?? 0) >= 60
+                  ? "bg-amber-50 text-amber-700 ring-amber-200"
+                  : "bg-slate-100 text-slate-500 ring-slate-200"
+              )}>
+                <RiBarChartLine className="h-2.5 w-2.5" />
+                {lead.leadScore ?? lead.score}
+              </span>
+            ) : null}
+            {lc ? (
               <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
                 {lastAction === "whatsapped"
                   ? <RiWhatsappLine className="h-3 w-3 text-[#1a9e4a]" />
                   : <RiPhoneLine className="h-3 w-3 text-blue-500" />}
-                {lastContact}
+                {lastAction === "whatsapped" ? "WA" : "Called"}&nbsp;·&nbsp;{lastContact ?? "Team member"}&nbsp;·&nbsp;{formatReadableDateTime(lc.at)}
               </span>
             ) : (
               <span className="text-[11px] text-slate-400">Never contacted</span>

@@ -100,6 +100,9 @@ function calcPriorityScore(lead: Record<string, unknown>): number {
  * Normalizes a raw lead document (from DB or scraper) into a consistent shape
  * that the frontend LeadRecord type expects.
  * Handles both Google Maps scraper format and manual CRM format.
+ *
+ * PRIORITY: Always prefer stored leadScore / lead_tier / isHotLead from MongoDB
+ * (set by the lead-gen scraper) over computed values.
  */
 function normalizeLead(doc: Record<string, unknown>): Record<string, unknown> {
   const lead = { ...doc };
@@ -143,12 +146,38 @@ function normalizeLead(doc: Record<string, unknown>): Record<string, unknown> {
     lead.niche = "Other";
   }
 
-  // Attach computed tier + priority_score
-  const tierResult = calculateTier(lead);
-  lead.tier = tierResult.tier;
-  lead.tierLabel = tierResult.label;
-  lead.tierColor = tierResult.color;
-  lead.priority_score = calcPriorityScore(lead);
+  // ── SCORING: prefer stored DB values, fall back to computed ──────────────
+  //
+  // Scraper stores: leadScore (0-100), lead_tier ("hot"/"warm"/"cold"), isHotLead (bool)
+  // Also stores:    crm_score for CRM buyer leads
+  //
+  const storedScore  = lead.leadScore   ?? lead.crm_score ?? null;
+  const storedTier   = lead.lead_tier   ?? null;  // "hot" | "warm" | "cold"
+
+  if (storedTier && ["hot", "warm", "cold"].includes(String(storedTier))) {
+    // Use the scraper's tier directly
+    lead.tier        = storedTier;
+    lead.leadQuality = storedTier;
+    const labels: Record<string, string> = { hot: "Hot", warm: "Warm", cold: "Cold" };
+    lead.tierLabel   = labels[String(storedTier)] ?? String(storedTier);
+    lead.tierColor   = storedTier === "hot" ? "#ff4757" : storedTier === "warm" ? "#ffa502" : "#747d8c";
+  } else {
+    // Fall back to computed tier (no scraper data)
+    const tierResult = calculateTier(lead);
+    lead.tier        = tierResult.tier;
+    lead.leadQuality = tierResult.tier;
+    lead.tierLabel   = tierResult.label;
+    lead.tierColor   = tierResult.color;
+  }
+
+  // priority_score: use stored leadScore if available, else compute
+  if (storedScore != null && !isNaN(Number(storedScore))) {
+    lead.priority_score = Number(storedScore);
+    lead.score          = Number(storedScore);
+  } else {
+    lead.priority_score = calcPriorityScore(lead);
+    lead.score          = lead.priority_score;
+  }
 
   return lead;
 }
@@ -270,19 +299,48 @@ function buildLeadFilter(searchParams: URLSearchParams) {
     andConditions.push({ createdAt });
   }
 
-  // Tier filter — applies DB-level conditions matching calculateTier logic
+  // Tier filter — FIRST check stored lead_tier/isHotLead from scraper,
+  // fall back to computed conditions for legacy data without these fields
   if (tier === "hot") {
-    andConditions.push({ rating: { $gte: 4.0 }, review_count: { $gte: 20 }, has_website: false, status: "new" });
+    andConditions.push({
+      $or: [
+        { lead_tier: "hot" },
+        { isHotLead: true },
+        // Legacy fallback for old leads without lead_tier
+        { $and: [{ rating: { $gte: 4.0 } }, { review_count: { $gte: 20 } }, { has_website: false }] },
+      ],
+    });
   } else if (tier === "warm") {
-    andConditions.push({ rating: { $gte: 3.5 }, review_count: { $gte: 10 }, has_website: false });
-    if (status) andConditions.push({ status });
+    andConditions.push({
+      $and: [
+        // Must NOT be hot
+        { lead_tier: { $ne: "hot" } },
+        { isHotLead: { $ne: true } },
+        {
+          $or: [
+            { lead_tier: "warm" },
+            // Legacy fallback
+            { $and: [{ rating: { $gte: 3.5 } }, { review_count: { $gte: 10 } }] },
+          ],
+        },
+      ],
+    });
   } else if (tier === "cold") {
-    andConditions.push({ $or: [
-      { review_count: { $lt: 10 } },
-      { rating: { $lt: 3.5 } },
-      { rating: null },
-      { review_count: null },
-    ] });
+    andConditions.push({
+      $and: [
+        { lead_tier: { $nin: ["hot", "warm"] } },
+        { isHotLead: { $ne: true } },
+        {
+          $or: [
+            { lead_tier: "cold" },
+            { review_count: { $lt: 10 } },
+            { rating: { $lt: 3.5 } },
+            { rating: null },
+            { review_count: null },
+          ],
+        },
+      ],
+    });
   }
 
   if (andConditions.length === 0) return {};
@@ -577,6 +635,9 @@ async function handleLeadDetailAction(
     const body = (await parseJson<LeadBody>(request)) ?? {};
     const via = (body as Record<string, unknown>).via === "whatsapp" ? "whatsapp" : "call";
     const update: Record<string, unknown> = {
+      last_contacted_at: new Date(),
+      last_contacted_by: payload.name,
+      last_action: via,
       $push: {
         callLogs: {
           calledBy: payload.id,
@@ -586,6 +647,13 @@ async function handleLeadDetailAction(
           outcome: body.outcome ?? "",
           duration: body.duration ?? "",
           via,
+        },
+        contact_history: {
+          action: via,
+          by_name: payload.name,
+          by_id: payload.id,
+          at: new Date(),
+          note: (body.notes ?? "") as string,
         },
       },
       status: callOutcomeStatus[String(body.outcome ?? "")] ?? "called",
@@ -678,14 +746,14 @@ async function handleLeads(request: NextRequest, segments: string[]) {
       const filter = buildLeadFilter(request.nextUrl.searchParams);
       const skip = (page - 1) * limit;
 
-      // Build sort order
+      // Build sort order — prefer stored leadScore over computed priority_score
       const sortParam = request.nextUrl.searchParams.get("sort") ?? "priority_score";
       type MongoSort = Record<string, 1 | -1>;
       const sortMap: Record<string, MongoSort> = {
         rating:         { rating: -1 },
         review_count:   { review_count: -1 },
         newest:         { createdAt: -1 },
-        priority_score: { rating: -1, review_count: -1 },
+        priority_score: { leadScore: -1, rating: -1, review_count: -1 },
       };
       const sortOrder: MongoSort = sortMap[sortParam] ?? sortMap["priority_score"];
 
@@ -694,10 +762,12 @@ async function handleLeads(request: NextRequest, segments: string[]) {
         Lead.countDocuments(filter),
       ]);
 
-      // Normalize, then sort by priority_score in JS (since it's computed)
+      // Normalize, then sort by stored leadScore or priority_score in JS
       const normalized = normalizeLeads(items.map((doc) => doc.toObject()));
       if (sortParam === "priority_score") {
-        normalized.sort((a, b) => (Number(b.priority_score ?? 0)) - (Number(a.priority_score ?? 0)));
+        normalized.sort((a, b) =>
+          (Number(b.priority_score ?? 0)) - (Number(a.priority_score ?? 0))
+        );
       }
 
       return ok({
@@ -1317,11 +1387,17 @@ async function handleUsers(request: NextRequest, segments: string[]) {
                 ],
               },
             },
-            calledLeads: {
-              $sum: { $cond: [{ $eq: ["$status", "called"] }, 1, 0] },
+            callsMade: {
+              $sum: { $size: { $ifNull: ["$callLogs", []] } },
             },
             interestedLeads: {
-              $sum: { $cond: [{ $eq: ["$status", "interested"] }, 1, 0] },
+              $sum: {
+                $cond: [
+                  { $in: ["$status", ["interested", "in_talks", "converted"]] },
+                  1,
+                  0
+                ],
+              },
             },
             closedLeads: {
               $sum: {
@@ -1339,7 +1415,7 @@ async function handleUsers(request: NextRequest, segments: string[]) {
     // Build a lookup map from the aggregate result
     const statsMap = new Map<string, {
       totalLeads: number; activeLeads: number;
-      calledLeads: number; interestedLeads: number; closedLeads: number;
+      callsMade: number; interestedLeads: number; closedLeads: number;
     }>();
     for (const row of leadStats) {
       if (row._id) statsMap.set(row._id.toString(), row);
@@ -1354,7 +1430,7 @@ async function handleUsers(request: NextRequest, segments: string[]) {
           passwordResetRequestedAt: employee.passwordResetRequestedAt ?? null,
           totalLeads: stats?.totalLeads ?? 0,
           activeLeads: stats?.activeLeads ?? 0,
-          callsMade: stats?.calledLeads ?? 0,
+          callsMade: stats?.callsMade ?? 0,
           interestedLeads: stats?.interestedLeads ?? 0,
           closedLeads: stats?.closedLeads ?? 0,
         };

@@ -24,7 +24,7 @@ export default function DashboardPage() {
 
   const activeLeads = leads?.filter((l) => l.status === "new") ?? [];
   const contactedLeads = leads?.filter((l) => l.status !== "new") ?? [];
-  const interestedCount = leads?.filter((l) => l.status === "interested").length ?? 0;
+  const interestedCount = leads?.filter((l) => ["interested", "in_talks", "converted"].includes(l.status)).length ?? 0;
   const closedCount = leads?.filter((l) => l.status === "closed_won").length ?? 0;
 
   // Top 3 active leads (hot first)

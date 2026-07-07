@@ -23,6 +23,7 @@ import {
   RiFlashlightLine,
   RiCheckboxCircleLine,
   RiCloseLine,
+  RiBarChartLine,
 } from "react-icons/ri";
 import Link from "next/link";
 import { Badge as _Badge } from "@/components/ui";
@@ -91,6 +92,17 @@ export type LeadRecord = {
   updatedAt?: string;
   future_crm_opportunity?: boolean;
   crm_lead_score?: number;
+  // Scraper-stored fields
+  leadScore?: number;
+  lead_tier?: "hot" | "warm" | "cold";
+  isHotLead?: boolean;
+  crm_score?: number;
+  crm_score_reasons?: string[];
+  score_reasons?: string[];
+  lead_type?: string;
+  sourcePlatform?: string;
+  estimatedBudget?: string;
+  photo_count?: number;
 };
 
 /** Fire contact-action API */
@@ -135,6 +147,35 @@ function relativeTime(dateStr?: string | null): string {
 
 function getInitials(name: string) {
   return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+export function getLastContactInfo(lead: LeadRecord) {
+  // Prefer explicit last_* fields, fall back to contact_history, then callLogs
+  if (lead.last_contacted_at) {
+    return {
+      at: lead.last_contacted_at,
+      by: lead.last_contacted_by ?? null,
+      action: lead.last_action ?? null,
+    };
+  }
+
+  const history = Array.isArray(lead.contact_history) ? lead.contact_history : [];
+  if (history.length) {
+    const last = history[history.length - 1];
+    return { at: last.at, by: last.by_name ?? null, action: last.action ?? null };
+  }
+
+  const logs = Array.isArray(lead.callLogs) ? lead.callLogs : [];
+  if (logs.length) {
+    const last = logs[logs.length - 1];
+    return {
+      at: last.calledAt ?? null,
+      by: typeof last.calledBy === "string" ? "Team member" : (last.calledBy?.name ?? "Team member"),
+      action: (last.via === "whatsapp" ? "whatsapped" : "called"),
+    };
+  }
+
+  return null;
 }
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -248,8 +289,11 @@ export function LeadCard({
   }
 
   const whatsappUrl = getWhatsAppUrl(lead);
-  const isContacted = lead.status !== "new";
-  const lastContactTime = lead.last_contacted_at;
+  const lastContact = getLastContactInfo(lead);
+  const isContacted = Boolean(lastContact) || lead.status !== "new";
+  const lastContactTime = lastContact?.at ?? null;
+  const lastContactBy = lastContact?.by ?? null;
+  const lastContactAction = lastContact?.action ?? null;
   const pitchLines = (lead.pitchMessage ?? "").split("\n");
   const pitchPreview = pitchLines.slice(0, 2).join("\n");
   const hasPitchMore = pitchLines.length > 2 || (lead.pitchMessage?.length ?? 0) > 120;
@@ -331,6 +375,20 @@ export function LeadCard({
             <NicheBadge niche={lead.niche} />
             {lead.tier ? <TierBadge tier={lead.tier} label={lead.tierLabel} /> : null}
             <StatusBadgeNew status={lead.status} />
+            {/* Show actual lead score from scraper if available */}
+            {(lead.leadScore ?? lead.score) != null ? (
+              <span className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset",
+                (lead.leadScore ?? lead.score ?? 0) >= 80
+                  ? "bg-red-50 text-red-700 ring-red-200"
+                  : (lead.leadScore ?? lead.score ?? 0) >= 60
+                  ? "bg-amber-50 text-amber-700 ring-amber-200"
+                  : "bg-slate-100 text-slate-500 ring-slate-200"
+              )}>
+                <RiBarChartLine className="h-2.5 w-2.5" />
+                {lead.leadScore ?? lead.score}
+              </span>
+            ) : null}
             {lead.future_crm_opportunity ? (
               <CrmUpsellBadge score={lead.crm_lead_score} />
             ) : null}
@@ -338,16 +396,16 @@ export function LeadCard({
 
           {/* Row 4: Last contact / never contacted + follow-up date */}
           <div className="mt-2 flex items-center justify-between gap-2">
-            {lastContactTime ? (
+            {lastContact ? (
               <p className={cn(
-                "inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold",
-                lead.last_action === "whatsapped" ? "text-[#1a9e4a]" : "text-blue-600"
+                "inline-flex min-w-0 items-center gap-2 truncate text-base md:text-lg font-extrabold",
+                lastContactAction === "whatsapped" ? "text-[#1a9e4a]" : "text-blue-600"
               )}>
-                {lead.last_action === "whatsapped"
-                  ? <RiWhatsappLine className="h-3 w-3 shrink-0" />
-                  : <RiPhoneLine className="h-3 w-3 shrink-0" />}
+                {lastContactAction === "whatsapped"
+                  ? <RiWhatsappLine className="h-5 w-5 shrink-0" />
+                  : <RiPhoneLine className="h-5 w-5 shrink-0" />}
                 <span className="truncate">
-                  {lead.last_action === "whatsapped" ? "WA" : "Called"}&nbsp;·&nbsp;{lead.last_contacted_by}&nbsp;·&nbsp;{relativeTime(lastContactTime)}
+                  {lastContactAction === "whatsapped" ? "WA" : "Called"}&nbsp;·&nbsp;{lastContactBy ?? "Team member"}&nbsp;·&nbsp;{formatReadableDateTime(lastContactTime)}
                 </span>
               </p>
             ) : (
@@ -613,6 +671,7 @@ export function LeadCompactRow({
   }
 
   const whatsappUrl = getWhatsAppUrl(lead);
+  const lastContact = getLastContactInfo(lead);
 
   return (
     <>
@@ -638,6 +697,17 @@ export function LeadCompactRow({
               <LeadQualityBadge quality={lead.leadQuality} />
               <StatusBadgeNew status={lead.status} />
             </div>
+            {lastContact ? (
+              <p className="mt-2 text-sm font-semibold">
+                {lastContact.action === "whatsapped" ? (
+                  <span className="inline-flex items-center gap-1 text-[#1a9e4a]"><RiWhatsappLine className="h-4 w-4" />WA</span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-emerald-600"><RiPhoneLine className="h-4 w-4" />Called</span>
+                )}&nbsp;·&nbsp;{lastContact.by ?? "Team member"}&nbsp;·&nbsp;{formatReadableDateTime(lastContact.at)}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-slate-400">Never contacted</p>
+            )}
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
