@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import useSWR from "swr";
-import { RiDashboardLine, RiLogoutBoxLine, RiGroupLine, RiAddCircleLine, RiListCheck3 } from "react-icons/ri";
+import { RiDashboardLine, RiLogoutBoxLine, RiGroupLine, RiAddCircleLine, RiListCheck3, RiFileList3Line } from "react-icons/ri";
 import { Button, Card } from "@/components/ui";
 import { apiFetch } from "@/lib/http";
 import { cn } from "@/lib/ui";
@@ -12,10 +12,11 @@ import { BrandMark } from "@/components/brand-mark";
 import { InstallAppButton } from "@/components/install-app-button";
 
 const navItems = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: RiDashboardLine },
-  { href: "/admin/leads", label: "Leads", icon: RiListCheck3 },
-  { href: "/admin/leads/new", label: "Add Lead", icon: RiAddCircleLine },
-  { href: "/admin/employees", label: "Employees", icon: RiGroupLine },
+  { href: "/admin/dashboard",    label: "Dashboard",   icon: RiDashboardLine  },
+  { href: "/admin/leads",        label: "Leads",       icon: RiListCheck3     },
+  { href: "/admin/leads/new",    label: "Add Lead",    icon: RiAddCircleLine  },
+  { href: "/admin/quotations",   label: "Quotations",  icon: RiFileList3Line  },
+  { href: "/admin/employees",    label: "Employees",   icon: RiGroupLine      },
 ];
 
 function isActivePath(pathname: string, href: string) {

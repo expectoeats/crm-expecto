@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isValidObjectId } from "mongoose";
 import { connectDatabase } from "@/lib/db";
-import { Lead, User, CrmBuyerLead } from "@/models";
+import { Lead, User, CrmBuyerLead, Quotation } from "@/models";
 import { authCookieOptions, cookieName, signAuthToken, verifyAuthToken } from "@/lib/auth";
 import { getIstDayRange } from "@/lib/time";
 
@@ -1744,8 +1744,127 @@ async function handleCrmLeads(request: NextRequest, segments: string[]) {
   return notFound("CRM leads route not found");
 }
 
-async function handleRequest(request: NextRequest) {
-  const segments = getSegments(request);
+// ─── Quotation Handler ────────────────────────────────────────────────────────
+async function handleQuotations(request: NextRequest, segments: string[]) {
+  const [first, second] = segments;
+
+  // GET /quotations — list
+  // POST /quotations — create
+  if (!first) {
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+
+    if (request.method === "GET") {
+      const page  = Math.max(Number(request.nextUrl.searchParams.get("page")  ?? 1), 1);
+      const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") ?? 20), 1), 100);
+      const skip  = (page - 1) * limit;
+      const status = request.nextUrl.searchParams.get("status") ?? "";
+      const search = request.nextUrl.searchParams.get("search") ?? "";
+
+      const filter: Record<string, unknown> = {};
+      if (status) filter.status = status;
+      if (search) {
+        filter.$or = [
+          { quotationNumber: new RegExp(search, "i") },
+          { clientName:      new RegExp(search, "i") },
+          { clientPhone:     new RegExp(search, "i") },
+          { clientCompany:   new RegExp(search, "i") },
+        ];
+      }
+
+      const [items, total] = await Promise.all([
+        Quotation.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate("createdBy", "name"),
+        Quotation.countDocuments(filter),
+      ]);
+
+      return ok({
+        quotations: items.map((d) => d.toObject()),
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      });
+    }
+
+    if (request.method === "POST") {
+      const body = (await parseJson<Record<string, unknown>>(request)) ?? {};
+
+      // Generate quotation number in route handler as primary source of truth
+      // (more reliable than pre-validate hook in Next.js serverless environment)
+      if (!body.quotationNumber) {
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
+        const prefix = `EX-${dateStr}-`;
+        const last = await Quotation.findOne(
+          { quotationNumber: { $regex: `^${prefix}` } },
+          { quotationNumber: 1 }
+        ).sort({ quotationNumber: -1 }).lean();
+        let seq = 1;
+        if (last?.quotationNumber) {
+          const parts = String(last.quotationNumber).split("-");
+          seq = (parseInt(parts[parts.length - 1], 10) || 0) + 1;
+        }
+        body.quotationNumber = `${prefix}${String(seq).padStart(3, "0")}`;
+      }
+
+      const doc = await Quotation.create({ ...body, createdBy: payload.id });
+      return ok({ quotation: doc.toObject() }, undefined, 201);
+    }
+
+    return methodNotAllowed(["GET", "POST"]);
+  }
+
+  // PATCH /quotations/:id/duplicate
+  if (second === "duplicate") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+    if (!isValidObjectId(first)) return fail("Invalid id", 400);
+
+    const src = await Quotation.findById(first).lean();
+    if (!src) return notFound("Quotation not found");
+
+    const copy = { ...src } as Record<string, unknown>;
+    delete copy._id;
+    delete copy.quotationNumber;
+    delete copy.createdAt;
+    delete copy.updatedAt;
+    copy.status = "draft";
+    copy.date = new Date();
+    copy.createdBy = payload.id;
+
+    const newDoc = await Quotation.create(copy);
+    return ok({ quotation: newDoc.toObject() }, undefined, 201);
+  }
+
+  // GET|PATCH|DELETE /quotations/:id
+  if (first && !second) {
+    const payload = await requireAdmin(request);
+    if (!payload) return unauthorized();
+    if (!isValidObjectId(first)) return fail("Invalid id", 400);
+
+    if (request.method === "GET") {
+      const doc = await Quotation.findById(first).populate("createdBy", "name").lean();
+      if (!doc) return notFound("Quotation not found");
+      return ok({ quotation: doc });
+    }
+
+    if (request.method === "PATCH") {
+      const body = (await parseJson<Record<string, unknown>>(request)) ?? {};
+      const updated = await Quotation.findByIdAndUpdate(first, body, { new: true, runValidators: false });
+      if (!updated) return notFound("Quotation not found");
+      return ok({ quotation: updated.toObject() });
+    }
+
+    if (request.method === "DELETE") {
+      await Quotation.findByIdAndDelete(first);
+      return ok(undefined, "Quotation deleted");
+    }
+
+    return methodNotAllowed(["GET", "PATCH", "DELETE"]);
+  }
+
+  return notFound("Quotation route not found");
+}
+
+async function handleRequest(request: NextRequest) {  const segments = getSegments(request);
 
   if (segments.length === 0) {
     return notFound("API route not found");
@@ -1761,6 +1880,7 @@ async function handleRequest(request: NextRequest) {
     if (section === "crm-leads") return handleCrmLeads(request, rest);
     if (section === "users") return handleUsers(request, rest);
     if (section === "stats") return handleStats(request);
+    if (section === "quotations") return handleQuotations(request, rest);
     return notFound("API route not found");
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Unexpected server error", 500);
