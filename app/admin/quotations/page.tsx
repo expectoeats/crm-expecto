@@ -239,7 +239,7 @@ export default function QuotationsPage() {
                   <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-slate-100">
                     <Link
                       href={`/admin/quotations/${q._id}`}
-                      className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-xl bg-slate-950 text-xs font-semibold text-white transition hover:bg-slate-800"
+                      className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-xl bg-violet-600 text-xs font-semibold text-white transition hover:bg-violet-700"
                     >
                       <RiEyeLine className="h-3.5 w-3.5" />
                       View

@@ -69,9 +69,17 @@ function PrintPage({ id }: { id: string }) {
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: #fff; color: #1e293b; }
-        @page { margin: 14mm 16mm; size: A4; }
+        @page {
+          margin: 14mm 16mm;
+          size: A4;
+          /* Hide browser's default header/footer (URL, page number, date) */
+          margin-header: 0;
+          margin-footer: 0;
+        }
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          /* Suppress browser-injected URL and title in header/footer */
+          head title { display: none; }
         }
         table { border-collapse: collapse; width: 100%; }
         .page { padding: 28px 32px; }
@@ -278,6 +286,7 @@ function PrintPage({ id }: { id: string }) {
           <div>
             <p className="ft-txt">Thank you for your business!</p>
             <p className="ft-txt" style={{ marginTop: "3px" }}>{COMPANY.name} &bull; {COMPANY.email} &bull; {COMPANY.phone}</p>
+            <p className="ft-txt" style={{ marginTop: "3px", fontWeight: 600, color: "#64748b" }}>https://expecto.online</p>
           </div>
           <div style={{ textAlign: "right" }}>
             <div className="sig-line" />

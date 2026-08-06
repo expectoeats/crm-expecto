@@ -106,30 +106,33 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <div className="px-4 py-5 pb-28 xl:px-8">{children}</div>
+        <div className="px-4 py-5 pb-32 xl:px-8 xl:pb-8">{children}</div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white/96 px-2 py-2 backdrop-blur xl:hidden">
-          {navItems.map(({ href, label, icon: Icon }) => {
-            const active = isActivePath(pathname, href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "relative flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-[11px] font-semibold transition",
-                  active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-200" : "text-slate-500"
-                )}
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/96 backdrop-blur xl:hidden">
+          {/* safe-area padding for notched phones */}
+          <div className="grid grid-cols-5 gap-0 px-1 pb-[env(safe-area-inset-bottom)] pt-1">
+            {navItems.map(({ href, label, icon: Icon }) => {
+              const active = isActivePath(pathname, href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "relative flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[10px] font-semibold transition",
+                    active ? "bg-slate-100 text-slate-950 ring-1 ring-slate-200" : "text-slate-500"
+                  )}
                 >
-                  <Icon className="h-5 w-5" />
-                  <span>{label}</span>
+                  <Icon className="h-[18px] w-[18px]" />
+                  <span className="leading-tight">{label}</span>
                   {href === "/admin/employees" && resetRequestCount > 0 ? (
-                    <span className="absolute right-4 top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    <span className="absolute right-1 top-0.5 inline-flex min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">
                       {resetRequestCount}
                     </span>
                   ) : null}
                 </Link>
-            );
-          })}
+              );
+            })}
+          </div>
         </nav>
       </main>
     </div>

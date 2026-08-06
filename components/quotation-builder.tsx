@@ -286,7 +286,7 @@ export function QuotationBuilder({ initial, onSaved }: {
   }
 
   return (
-    <div className="space-y-6 pb-28">
+    <div className="space-y-6 pb-52 sm:pb-32 xl:pb-24">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -488,28 +488,32 @@ export function QuotationBuilder({ initial, onSaved }: {
       </Section>
 
       {/* ── Sticky Action Bar ── */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/96 px-4 py-3 backdrop-blur xl:pl-[304px]">
-        <div className="mx-auto flex max-w-4xl items-center gap-2 overflow-x-auto">
-          <Button onClick={() => handleSave("draft")} disabled={saving} variant="secondary" className="shrink-0 gap-2 px-4 py-2.5 text-sm">
-            <RiSaveLine className="h-4 w-4" />{saving ? "Saving…" : "Save Draft"}
-          </Button>
-          <Button onClick={() => setShowPreview(true)} className="shrink-0 gap-2 bg-violet-600 px-4 py-2.5 text-sm hover:bg-violet-700">
-            <RiEyeLine className="h-4 w-4" />Preview &amp; Export
-          </Button>
-          <Button onClick={() => handleSave("sent")} disabled={saving} className="shrink-0 gap-2 bg-blue-600 px-4 py-2.5 text-sm hover:bg-blue-700">
-            <RiFilePdfLine className="h-4 w-4" />Save &amp; Mark Sent
-          </Button>
-          {q.clientEmail && (
-            <a href={getMailto()} className="shrink-0 inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200">
-              <RiMailLine className="h-4 w-4" />Email
-            </a>
-          )}
-          {q.clientPhone && (
-            <a href={`https://wa.me/${q.clientPhone.replace(/\D/g,"")}?text=${getWaMsg()}`} target="_blank" rel="noreferrer"
-              className="shrink-0 inline-flex items-center gap-2 rounded-2xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1fba58]">
-              <RiWhatsappLine className="h-4 w-4" />WhatsApp
-            </a>
-          )}
+      {/* sits just above the mobile bottom nav (~64px tall) */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/96 backdrop-blur xl:pl-72">
+        {/* inner wrapper: on mobile add bottom offset for nav bar */}
+        <div className="pb-[72px] pt-2.5 px-3 xl:pb-0 xl:py-3 xl:px-6">
+          <div className="mx-auto flex max-w-4xl items-center gap-2 overflow-x-auto scrollbar-none">
+            <Button onClick={() => handleSave("draft")} disabled={saving} variant="secondary" className="shrink-0 gap-1.5 px-3.5 py-2.5 text-sm">
+              <RiSaveLine className="h-4 w-4" />{saving ? "Saving…" : "Save Draft"}
+            </Button>
+            <Button onClick={() => setShowPreview(true)} className="shrink-0 gap-1.5 bg-violet-600 px-3.5 py-2.5 text-sm hover:bg-violet-700">
+              <RiEyeLine className="h-4 w-4" />Preview &amp; Export
+            </Button>
+            <Button onClick={() => handleSave("sent")} disabled={saving} className="shrink-0 gap-1.5 bg-blue-600 px-3.5 py-2.5 text-sm hover:bg-blue-700">
+              <RiFilePdfLine className="h-4 w-4" />Mark Sent
+            </Button>
+            {q.clientEmail && (
+              <a href={getMailto()} className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl bg-slate-100 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200">
+                <RiMailLine className="h-4 w-4" />Email
+              </a>
+            )}
+            {q.clientPhone && (
+              <a href={`https://wa.me/${q.clientPhone.replace(/\D/g,"")}?text=${getWaMsg()}`} target="_blank" rel="noreferrer"
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl bg-[#25D366] px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-[#1fba58]">
+                <RiWhatsappLine className="h-4 w-4" />WhatsApp
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>
