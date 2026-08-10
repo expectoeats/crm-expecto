@@ -12,36 +12,27 @@ const fetcher = async (path: string) =>
   (await apiFetch<{ quotation: QuotationData }>(path)).data?.quotation ?? null;
 
 function fmt(n: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency", currency: "INR", maximumFractionDigits: 0,
-  }).format(n);
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 }
 function fmtDate(d: string) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
-  });
+  return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function PrintPage({ id }: { id: string }) {
-  const { data: q, isLoading } = useSWR(
-    id ? `/quotations/${id}` : null,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+  const { data: q, isLoading } = useSWR(id ? `/quotations/${id}` : null, fetcher, { revalidateOnFocus: false });
 
   useEffect(() => {
     if (q) {
-      // Auto-print once data loads
-      const t = setTimeout(() => window.print(), 600);
+      const t = setTimeout(() => window.print(), 700);
       return () => clearTimeout(t);
     }
   }, [q]);
 
   if (isLoading || !q) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "system-ui" }}>
-        <p style={{ color: "#64748b" }}>Loading quotation…</p>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", fontFamily:"system-ui" }}>
+        <p style={{ color:"#6b7280" }}>Loading quotation…</p>
       </div>
     );
   }
@@ -56,245 +47,345 @@ function PrintPage({ id }: { id: string }) {
   const hasTax = normalized.taxAmount > 0;
 
   const payItems = [
-    { label: "Account Name", value: PAYMENT.accountName, mono: false },
-    { label: "Bank",          value: PAYMENT.bankName,    mono: false },
-    { label: "Account No.",   value: PAYMENT.accountNumber, mono: true },
-    { label: "IFSC Code",     value: PAYMENT.ifsc,        mono: true  },
-    { label: "UPI ID",        value: PAYMENT.upiId,       mono: true  },
-    { label: "Mobile",        value: PAYMENT.mobile,      mono: false },
+    { label: "Account Name",  value: PAYMENT.accountName,   mono: false },
+    { label: "Bank",          value: PAYMENT.bankName,       mono: false },
+    { label: "Account No.",   value: PAYMENT.accountNumber,  mono: true  },
+    { label: "IFSC Code",     value: PAYMENT.ifsc,           mono: true  },
+    { label: "UPI ID",        value: PAYMENT.upiId,          mono: true  },
+    { label: "Mobile",        value: PAYMENT.mobile,         mono: false },
   ];
+
+  const CSS = `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #fff; color: #111827; font-size: 12px; }
+    @page { size: A4; margin: 12mm 14mm; margin-header: 0; margin-footer: 0; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+    table { border-collapse: collapse; width: 100%; }
+
+    /* ── HEADER BAND ── */
+    .hdr-band { background: #0f172a; padding: 18px 28px; display: flex; justify-content: space-between; align-items: center; }
+    .hdr-left { display: flex; align-items: center; gap: 14px; }
+    .hdr-logo { width: 40px; height: 40px; min-width: 40px; border-radius: 6px; overflow: hidden; background: #1e293b; }
+    .hdr-logo img { width: 40px; height: 40px; object-fit: cover; display: block; }
+    .hdr-co-name { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+    .hdr-co-sub { font-size: 10px; color: #94a3b8; margin-top: 3px; }
+    .hdr-right { text-align: right; }
+    .hdr-q-label { font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4em; color: #6366f1; }
+    .hdr-q-num { font-size: 24px; font-weight: 900; color: #6366f1; letter-spacing: -0.03em; margin-top: 2px; line-height: 1; }
+    .hdr-status { display: inline-block; margin-top: 6px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; padding: 3px 10px; border-radius: 99px; border: 1px solid #334155; color: #94a3b8; }
+
+    /* ── INFO STRIP ── */
+    .info-strip { background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: grid; grid-template-columns: repeat(4, 1fr); }
+    .info-strip-cell { padding: 10px 20px; border-right: 1px solid #e5e7eb; }
+    .info-strip-cell:last-child { border-right: none; }
+    .strip-lbl { font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4em; color: #6366f1; margin-bottom: 3px; }
+    .strip-val { font-size: 12px; font-weight: 600; color: #111827; }
+
+    /* ── BILL TO / PROJECT ── */
+    .client-section { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid #e5e7eb; }
+    .client-col { padding: 16px 28px; }
+    .client-col:first-child { border-right: 1px solid #e5e7eb; }
+    .sec-label { font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4em; color: #0f172a;
+      padding-left: 0; border-left: none; margin-bottom: 8px; display: inline-flex; align-items: center; gap: 8px; }
+    .sec-label::before { content: ''; display: inline-block; width: 3px; height: 11px; border-radius: 2px; background: #1d4ed8; }
+    .client-col:last-child .sec-label::before { background: #0f766e; }
+    .client-col:last-child .sec-label { color: #0f766e; }
+    .cl-name { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 3px; letter-spacing: -0.015em; }
+    .cl-company { font-size: 12px; color: #374151; margin-bottom: 2px; }
+    .cl-muted { font-size: 11px; color: #6b7280; line-height: 1.5; }
+
+    /* ── TABLE ── */
+    .tbl-wrap { padding: 0; margin: 20px 28px 0; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .tbl-head-row { background: #0f172a; }
+    .tbl-head-row th { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.22em;
+      color: #fff; padding: 9px 8px; text-align: left; }
+    .tbl-head-row th:not(:first-child) { text-align: right; }
+    .tbl-head-row th:nth-child(3) { text-align: center; }
+    td { font-size: 12px; color: #374151; padding: 9px 8px; border-bottom: 1px solid #f3f4f6; vertical-align: top; line-height: 1.5; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #f9fafb; }
+    .td-right { text-align: right; }
+    .td-center { text-align: center; }
+    .td-item-name { font-weight: 600; color: #111827; }
+    .td-list-price { font-size: 10px; color: #9ca3af; display: block; margin-top: 2px; }
+    .td-total { font-weight: 700; color: #111827; }
+    .td-included { color: #9ca3af; font-style: italic; }
+
+    /* ── TOTALS ── */
+    .totals-section { padding: 10px 28px 0; }
+    .totals-inner { width: 100%; }
+    .tot-rows-wrap { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 0; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; }
+    .tot-row { display: flex; justify-content: space-between; padding: 3px 0; width: 300px; }
+    .tot-lbl { font-size: 11px; color: #6b7280; }
+    .tot-val { font-size: 11px; font-weight: 600; color: #374151; }
+    .tot-red { color: #ef4444; }
+    .gt-row { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 28px; background: #f8fafc; border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; margin: 8px 28px 0; border-radius: 6px; }
+    .gt-lbl { font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.06em; }
+    .gt-val { font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: -0.02em; }
+    .badges-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 10px 28px 0; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .badge-adv { background: #ecfdf5; border-right: 1px solid #86efac; padding: 10px 16px; text-align: center; }
+    .badge-bal { background: #fffbeb; padding: 10px 16px; text-align: center; }
+    .badge-lbl { font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.25em; color: #6b7280; }
+    .badge-val { font-size: 14px; font-weight: 800; color: #111827; margin-top: 2px; letter-spacing: -0.015em; }
+
+    /* ── PAGE BREAK ── */
+    .page-break { page-break-before: always; break-before: page; }
+
+    /* ── PAYMENT SECTION ── */
+    .pay-section { padding: 20px 28px; border-bottom: 1px solid #e5e7eb; }
+    .pay-section-hdr { font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4em;
+      color: #0f172a; padding-bottom: 10px; border-bottom: 2px solid #0f172a; margin-bottom: 14px; display: inline-flex; align-items: center; gap: 8px; }
+    .pay-section-hdr::before { content: ''; display: inline-block; width: 3px; height: 11px; border-radius: 2px; background: #1d4ed8; }
+    .pay-table { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .pay-cell { padding: 10px 14px; border-right: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; }
+    .pay-cell:nth-child(3), .pay-cell:nth-child(6) { border-right: none; }
+    .pay-cell:nth-child(4), .pay-cell:nth-child(5), .pay-cell:nth-child(6) { border-bottom: none; }
+    .pay-lbl { font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3em; color: #9ca3af; margin-bottom: 4px; }
+    .pay-val { font-size: 12px; font-weight: 700; color: #111827; }
+    .pay-mono { font-size: 12px; font-weight: 700; color: #111827; font-family: 'Courier New', monospace; }
+
+    /* ── NOTES + TERMS ── */
+    .nt-section { padding: 20px 28px; border-bottom: 1px solid #e5e7eb; }
+    .notes-block { margin-bottom: 16px; }
+    .note-item { display: flex; align-items: flex-start; gap: 7px; font-size: 11px; color: #374151; margin-bottom: 5px; line-height: 1.5; }
+    .note-check { color: #6366f1; font-weight: 900; flex-shrink: 0; font-size: 12px; }
+    .terms-list { list-style: none; padding: 0; margin: 0; }
+    .term-item { display: flex; gap: 8px; font-size: 11px; color: #6b7280; margin-bottom: 6px; line-height: 1.6; text-align: left; }
+    .term-num { font-weight: 700; color: #6366f1; flex-shrink: 0; min-width: 16px; }
+
+    /* ── FOOTER BAND ── */
+    .footer-band { background: #0f172a; padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+    .ft-left { font-size: 11px; font-weight: 600; color: #fff; }
+    .ft-right { text-align: right; }
+    .ft-line { font-size: 10px; color: #94a3b8; line-height: 1.7; }
+    .ft-link { color: #818cf8; font-weight: 600; }
+    .sig-area { padding: 16px 28px 4px; display: flex; justify-content: flex-end; }
+    .sig-box { text-align: center; }
+    .sig-line { border-bottom: 1px dashed #d1d5db; width: 130px; margin-bottom: 6px; }
+    .sig-lbl { font-size: 10px; font-weight: 600; color: #6b7280; }
+    .sig-co { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+  `;
 
   return (
     <>
-      <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #fff; color: #1e293b; }
-        @page {
-          margin: 14mm 16mm;
-          size: A4;
-          /* Hide browser's default header/footer (URL, page number, date) */
-          margin-header: 0;
-          margin-footer: 0;
-        }
-        @media print {
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          /* Suppress browser-injected URL and title in header/footer */
-          head title { display: none; }
-        }
-        table { border-collapse: collapse; width: 100%; }
-        .page { padding: 28px 32px; }
-        .hdr { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 24px; border-bottom: 1.5px solid #e2e8f0; }
-        .logo-box { width: 44px; height: 44px; min-width: 44px; border-radius: 10px; overflow: hidden; background: #0f172a; }
-        .logo-box img { width: 44px; height: 44px; object-fit: cover; display: block; }
-        .co-name { font-size: 15px; font-weight: 600; color: #1e293b; letter-spacing: -0.01em; }
-        .co-sub { font-size: 11px; color: #94a3b8; margin-top: 4px; }
-        .q-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4em; color: #94a3b8; text-align: right; }
-        .q-num { font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.025em; text-align: right; margin-top: 2px; }
-        .meta-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-        .meta-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.18em; color: #94a3b8; }
-        .meta-value { font-size: 11px; font-weight: 500; color: #334155; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding: 24px 0; border-bottom: 1px solid #f1f5f9; }
-        .sec-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.35em; color: #94a3b8; margin-bottom: 10px; }
-        .client-name { font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 4px; }
-        .client-sub { font-size: 12px; color: #475569; margin-top: 4px; }
-        .client-muted { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.5; }
-        .items-table { margin-top: 24px; }
-        th { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.25em; color: #64748b; padding-bottom: 10px; }
-        td { font-size: 12px; color: #334155; padding: 10px 0; border-bottom: 1px solid #f1f5f9; vertical-align: top; line-height: 1.55; }
-        .td-name { font-weight: 500; color: #1e293b; }
-        .td-list { font-size: 10px; color: #94a3b8; display: block; margin-top: 3px; }
-        .td-bold { font-weight: 600; color: #1e293b; }
-        .totals-wrap { width: 230px; margin-left: auto; margin-top: 20px; }
-        .tot-row { display: flex; justify-content: space-between; padding: 5px 0; }
-        .tot-lbl { font-size: 11px; color: #64748b; }
-        .tot-val { font-size: 11px; font-weight: 600; color: #334155; }
-        .tot-red { color: #ef4444; }
-        .gt-row { display: flex; justify-content: space-between; padding: 12px 0 8px; border-top: 1.5px solid #1e293b; margin-top: 8px; }
-        .gt-lbl { font-size: 13px; font-weight: 700; color: #0f172a; }
-        .gt-val { font-size: 15px; font-weight: 700; color: #0f172a; }
-        .amt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-        .adv-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; text-align: center; }
-        .bal-box { background: #fefce8; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px; text-align: center; }
-        .amt-box-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; }
-        .amt-box-val { font-size: 13px; font-weight: 700; margin-top: 5px; }
-        .pay-wrap { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; margin-top: 32px; }
-        .pay-hdr { background: #f8fafc; padding: 12px 18px; border-bottom: 1px solid #e2e8f0; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.32em; color: #64748b; }
-        .pay-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; }
-        .pay-cell { padding: 14px 18px; }
-        .pay-lbl { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.22em; color: #94a3b8; margin-bottom: 6px; }
-        .pay-val { font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.4; }
-        .pay-mono { font-size: 11px; font-weight: 600; color: #1e293b; font-family: monospace; line-height: 1.4; }
-        .nt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 32px; }
-        .note-item { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: #475569; margin-bottom: 8px; line-height: 1.5; }
-        .note-check { color: #10b981; flex-shrink: 0; }
-        .term-item { font-size: 10.5px; color: #64748b; margin-bottom: 7px; line-height: 1.6; }
-        .term-num { font-weight: 600; color: #475569; margin-right: 4px; }
-        .footer { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 24px; margin-top: 36px; border-top: 1px solid #e2e8f0; }
-        .ft-txt { font-size: 10px; color: #94a3b8; line-height: 1.6; }
-        .sig-line { border-bottom: 1px dashed #cbd5e1; width: 140px; margin-bottom: 28px; }
-        .sig-lbl { font-size: 11px; font-weight: 500; color: #475569; }
-      `}</style>
+      <style>{CSS}</style>
 
-      <div className="page">
+      {/* ═══════════════ PAGE 1 ═══════════════ */}
 
-        {/* HEADER */}
-        <div className="hdr">
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <div className="logo-box">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={LOGO_BASE64} alt="logo" />
-            </div>
-            <div>
-              <p className="co-name">{COMPANY.name}</p>
-              <p className="co-sub">{COMPANY.email} &bull; {COMPANY.phone}</p>
-            </div>
+      {/* HEADER BAND */}
+      <div className="hdr-band">
+        <div className="hdr-left">
+          <div className="hdr-logo">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_BASE64} alt="logo" />
           </div>
           <div>
-            <p className="q-label">Quotation</p>
-            <p className="q-num">{normalized.quotationNumber || "DRAFT"}</p>
-            <div style={{ marginTop: "12px", minWidth: "172px" }}>
-              <div className="meta-row"><span className="meta-label">Date</span><span className="meta-value">{fmtDate(normalized.date)}</span></div>
-              <div className="meta-row"><span className="meta-label">Valid Till</span><span className="meta-value">{fmtDate(normalized.validTill)}</span></div>
-              {normalized.salesExecutive && <div className="meta-row"><span className="meta-label">Executive</span><span className="meta-value">{normalized.salesExecutive}</span></div>}
-              <div className="meta-row"><span className="meta-label">Currency</span><span className="meta-value">{normalized.currency}</span></div>
-            </div>
+            <p className="hdr-co-name">{COMPANY.name}</p>
+            <p className="hdr-co-sub">{COMPANY.email}&nbsp;&nbsp;·&nbsp;&nbsp;{COMPANY.phone}</p>
           </div>
         </div>
-
-        {/* BILL TO + PROJECT */}
-        <div className="info-grid">
-          <div>
-            <p className="sec-label">Bill To</p>
-            <p className="client-name">{normalized.clientName || "—"}</p>
-            {normalized.clientCompany && normalized.clientCompany !== normalized.clientName && <p className="client-sub">{normalized.clientCompany}</p>}
-            {normalized.clientPhone   && <p className="client-muted">{normalized.clientPhone}</p>}
-            {normalized.clientEmail   && <p className="client-muted">{normalized.clientEmail}</p>}
-            {normalized.clientAddress && <p className="client-muted">{normalized.clientAddress}</p>}
-            {normalized.clientGst     && <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "4px" }}>GSTIN: {normalized.clientGst}</p>}
-          </div>
-          <div>
-            <p className="sec-label">Project</p>
-            <p className="client-name">{normalized.projectType || "Custom Project"}</p>
-            <p className="client-muted">Timeline: <strong style={{ color: "#475569" }}>{normalized.timeline}</strong></p>
-            <p className="client-muted">Payment: <strong style={{ color: "#475569" }}>{normalized.paymentTerms}</strong></p>
-          </div>
+        <div className="hdr-right">
+          <p className="hdr-q-label">Quotation</p>
+          <p className="hdr-q-num">{normalized.quotationNumber || "DRAFT"}</p>
+          <span className="hdr-status">{normalized.status.toUpperCase()}</span>
         </div>
+      </div>
 
-        {/* LINE ITEMS */}
-        <div className="items-table">
-          <table>
-            <thead>
-              <tr style={{ borderBottom: "1.5px solid #334155" }}>
-                <th style={{ textAlign: "left", width: "28px" }}>#</th>
-                <th style={{ textAlign: "left" }}>Service / Feature</th>
-                <th style={{ textAlign: "center", width: "40px" }}>Qty</th>
-                <th style={{ textAlign: "right", width: "100px" }}>Unit Price</th>
-                <th style={{ textAlign: "right", width: "100px" }}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {normalized.lineItems.map((item, idx) => (
+      {/* INFO STRIP */}
+      <div className="info-strip">
+        <div className="info-strip-cell">
+          <p className="strip-lbl">Date</p>
+          <p className="strip-val">{fmtDate(normalized.date)}</p>
+        </div>
+        <div className="info-strip-cell">
+          <p className="strip-lbl">Valid Till</p>
+          <p className="strip-val">{fmtDate(normalized.validTill)}</p>
+        </div>
+        <div className="info-strip-cell">
+          <p className="strip-lbl">Executive</p>
+          <p className="strip-val">{normalized.salesExecutive || "—"}</p>
+        </div>
+        <div className="info-strip-cell">
+          <p className="strip-lbl">Currency</p>
+          <p className="strip-val">{normalized.currency}</p>
+        </div>
+      </div>
+
+      {/* BILL TO + PROJECT */}
+      <div className="client-section">
+        <div className="client-col">
+          <p className="sec-label">Bill To</p>
+          <p className="cl-name">{normalized.clientName || "—"}</p>
+          {normalized.clientCompany && normalized.clientCompany !== normalized.clientName &&
+            <p className="cl-company">{normalized.clientCompany}</p>}
+          {normalized.clientPhone   && <p className="cl-muted">{normalized.clientPhone}</p>}
+          {normalized.clientEmail   && <p className="cl-muted">{normalized.clientEmail}</p>}
+          {normalized.clientAddress && <p className="cl-muted">{normalized.clientAddress}</p>}
+          {normalized.clientGst     && <p className="cl-muted" style={{ marginTop: "4px", fontSize: "10px" }}>GSTIN: {normalized.clientGst}</p>}
+        </div>
+        <div className="client-col">
+          <p className="sec-label">Project</p>
+          <p className="cl-name">{normalized.projectType || "Custom Project"}</p>
+          <p className="cl-muted" style={{ marginTop: "4px" }}>
+            <span style={{ fontWeight: 600, color: "#374151" }}>Timeline:</span> {normalized.timeline}
+          </p>
+          <p className="cl-muted" style={{ marginTop: "3px" }}>
+            <span style={{ fontWeight: 600, color: "#374151" }}>Payment:</span> {normalized.paymentTerms}
+          </p>
+        </div>
+      </div>
+
+      {/* LINE ITEMS TABLE */}
+      <div className="tbl-wrap">
+        <table>
+          <thead>
+            <tr className="tbl-head-row">
+              <th style={{ width: "26px" }}>#</th>
+              <th>Service / Feature</th>
+              <th style={{ textAlign: "center", width: "36px" }}>Qty</th>
+              <th style={{ textAlign: "right", width: "90px" }}>Unit Price</th>
+              <th style={{ textAlign: "right", width: "90px" }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {normalized.lineItems.map((item, idx) => {
+              const isIncluded = item.price === 0;
+              return (
                 <tr key={idx}>
-                  <td style={{ fontSize: "10px", color: "#94a3b8" }}>{idx + 1}</td>
+                  <td style={{ color: "#9ca3af", fontSize: "10px" }}>{idx + 1}</td>
                   <td>
-                    <span className="td-name">{item.name}</span>
+                    <span className="td-item-name">{item.name}</span>
                     {item.defaultPrice > 0 && item.price !== item.defaultPrice && (
-                      <span className="td-list">List: {fmt(item.defaultPrice)}</span>
+                      <span className="td-list-price">List: {fmt(item.defaultPrice)}</span>
                     )}
                   </td>
-                  <td style={{ textAlign: "center" }}>{item.qty}</td>
-                  <td style={{ textAlign: "right" }}>{fmt(item.price)}</td>
-                  <td style={{ textAlign: "right" }} className="td-bold">{fmt(item.total)}</td>
+                  <td className="td-center">{item.qty}</td>
+                  <td className="td-right">
+                    {isIncluded ? <span className="td-included">Included</span> : fmt(item.price)}
+                  </td>
+                  <td className="td-right td-total">
+                    {isIncluded ? <span className="td-included">Included</span> : fmt(item.total)}
+                  </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-        {/* TOTALS */}
-        <div className="totals-wrap">
+      {/* TOTALS */}
+      <div className="totals-section">
+        <div className="totals-inner">
           {(hasDiscount || hasTax) && (
-            <div style={{ paddingBottom: "8px", borderBottom: "1px solid #e2e8f0" }}>
-              <div className="tot-row"><span className="tot-lbl">Subtotal</span><span className="tot-val">{fmt(normalized.subtotal)}</span></div>
+            <div className="tot-rows-wrap">
+              <div className="tot-row">
+                <span className="tot-lbl">Subtotal</span>
+                <span className="tot-val">{fmt(normalized.subtotal)}</span>
+              </div>
               {hasDiscount && (
                 <div className="tot-row">
-                  <span className="tot-lbl">{normalized.discountType === "percent" ? `Discount (${normalized.discountValue}%)` : "Discount"}</span>
+                  <span className="tot-lbl">
+                    {normalized.discountType === "percent"
+                      ? `Discount (${normalized.discountValue}%)`
+                      : "Discount"}
+                  </span>
                   <span className="tot-val tot-red">−{fmt(normalized.discountAmount)}</span>
                 </div>
               )}
-              {hasTax && <div className="tot-row"><span className="tot-lbl">GST ({normalized.taxRate}%)</span><span className="tot-val">{fmt(normalized.taxAmount)}</span></div>}
+              {hasTax && (
+                <div className="tot-row">
+                  <span className="tot-lbl">GST ({normalized.taxRate}%)</span>
+                  <span className="tot-val">{fmt(normalized.taxAmount)}</span>
+                </div>
+              )}
             </div>
           )}
-          <div className="gt-row">
-            <span className="gt-lbl">Grand Total</span>
-            <span className="gt-val">{fmt(normalized.grandTotal)}</span>
-          </div>
-          <div className="amt-grid">
-            <div className="adv-box">
-              <p className="amt-box-label" style={{ color: "#166534" }}>Advance ({normalized.advancePercent}%)</p>
-              <p className="amt-box-val" style={{ color: "#14532d" }}>{fmt(normalized.advanceAmount)}</p>
-            </div>
-            <div className="bal-box">
-              <p className="amt-box-label" style={{ color: "#92400e" }}>Balance Due</p>
-              <p className="amt-box-val" style={{ color: "#78350f" }}>{fmt(normalized.remainingAmount)}</p>
-            </div>
-          </div>
         </div>
-
-        {/* PAYMENT DETAILS */}
-        <div className="pay-wrap">
-          <div className="pay-hdr">Payment Details</div>
-          <div className="pay-grid">
-            {payItems.map((item, i) => (
-              <div key={i} className="pay-cell" style={{
-                borderBottom: i < 3 ? "1px solid #f1f5f9" : undefined,
-                borderRight: i % 3 !== 2 ? "1px solid #f1f5f9" : undefined,
-              }}>
-                <p className="pay-lbl">{item.label}</p>
-                <p className={item.mono ? "pay-mono" : "pay-val"}>{item.value}</p>
-              </div>
-            ))}
-          </div>
+      </div>
+      {/* Grand Total — full width accent bar */}
+      <div className="gt-row">
+        <span className="gt-lbl">Grand Total</span>
+        <span className="gt-val">{fmt(normalized.grandTotal)}</span>
+      </div>
+      {/* Advance / Balance — full width two-col */}
+      <div className="badges-row">
+        <div className="badge-adv">
+          <p className="badge-lbl">Advance ({normalized.advancePercent}%)</p>
+          <p className="badge-val" style={{ color: "#065f46" }}>{fmt(normalized.advanceAmount)}</p>
         </div>
+        <div className="badge-bal">
+          <p className="badge-lbl">Balance Due</p>
+          <p className="badge-val" style={{ color: "#92400e" }}>{fmt(normalized.remainingAmount)}</p>
+        </div>
+      </div>
 
-        {/* NOTES + TERMS */}
-        {(normalized.notes.filter(Boolean).length > 0 || normalized.termsAndConditions.filter(Boolean).length > 0) && (
-          <div className="nt-grid">
-            {normalized.notes.filter(Boolean).length > 0 && (
-              <div>
-                <p className="sec-label">Notes</p>
-                {normalized.notes.filter(Boolean).map((note, i) => (
-                  <div key={i} className="note-item">
-                    <span className="note-check">✓</span>{note}
-                  </div>
-                ))}
-              </div>
-            )}
-            {normalized.termsAndConditions.filter(Boolean).length > 0 && (
-              <div>
-                <p className="sec-label">Terms &amp; Conditions</p>
+      {/* ═══════════════ PAGE 2 ═══════════════ */}
+      <div className="page-break" />
+
+      {/* PAYMENT DETAILS */}
+      <div className="pay-section">
+        <p className="pay-section-hdr">Payment Details</p>
+        <div className="pay-table">
+          {payItems.map((item, i) => (
+            <div key={i} className="pay-cell">
+              <p className="pay-lbl">{item.label}</p>
+              <p className={item.mono ? "pay-mono" : "pay-val"}>{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* NOTES + TERMS */}
+      {(normalized.notes.filter(Boolean).length > 0 || normalized.termsAndConditions.filter(Boolean).length > 0) && (
+        <div className="nt-section">
+          {normalized.notes.filter(Boolean).length > 0 && (
+            <div className="notes-block">
+              <p className="sec-label" style={{ marginBottom: "10px" }}>Notes</p>
+              {normalized.notes.filter(Boolean).map((note, i) => (
+                <div key={i} className="note-item">
+                  <span className="note-check">✦</span>
+                  <span>{note}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {normalized.termsAndConditions.filter(Boolean).length > 0 && (
+            <div>
+              <p className="sec-label" style={{ marginBottom: "10px" }}>Terms &amp; Conditions</p>
+              <ol className="terms-list">
                 {normalized.termsAndConditions.filter(Boolean).map((t, i) => (
-                  <p key={i} className="term-item"><span className="term-num">{i + 1}.</span>{t}</p>
+                  <li key={i} className="term-item">
+                    <span className="term-num">{i + 1}.</span>
+                    <span>{t}</span>
+                  </li>
                 ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* FOOTER */}
-        <div className="footer">
-          <div>
-            <p className="ft-txt">Thank you for your business!</p>
-            <p className="ft-txt" style={{ marginTop: "3px" }}>{COMPANY.name} &bull; {COMPANY.email} &bull; {COMPANY.phone}</p>
-            <p className="ft-txt" style={{ marginTop: "3px", fontWeight: 600, color: "#64748b" }}>https://expecto.online</p>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="sig-line" />
-            <p className="sig-lbl">Authorised Signature</p>
-            <p className="ft-txt">{COMPANY.name}</p>
-          </div>
+              </ol>
+            </div>
+          )}
         </div>
+      )}
 
+      {/* SIGNATURE */}
+      <div className="sig-area">
+        <div className="sig-box">
+          <div className="sig-line" />
+          <p className="sig-lbl">Authorised Signature</p>
+          <p className="sig-co">{COMPANY.name}</p>
+        </div>
+      </div>
+
+      {/* FOOTER BAND */}
+      <div className="footer-band">
+        <div className="ft-left">Thank you for your business!</div>
+        <div className="ft-right">
+          <p className="ft-line">
+            <span className="ft-link">https://expecto.online</span>
+            &nbsp;&nbsp;·&nbsp;&nbsp;+91 87072 24376
+            &nbsp;&nbsp;·&nbsp;&nbsp;hello@expecto.online
+          </p>
+        </div>
       </div>
     </>
   );
@@ -303,7 +394,7 @@ function PrintPage({ id }: { id: string }) {
 export default function QuotationPrintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   return (
-    <Suspense fallback={<div style={{ padding: "40px", fontFamily: "system-ui", color: "#64748b" }}>Loading…</div>}>
+    <Suspense fallback={<div style={{ padding: "40px", fontFamily: "system-ui", color: "#6b7280" }}>Loading…</div>}>
       <PrintPage id={id} />
     </Suspense>
   );
