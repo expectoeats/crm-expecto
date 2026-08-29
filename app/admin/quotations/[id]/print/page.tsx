@@ -24,6 +24,9 @@ function PrintPage({ id }: { id: string }) {
 
   useEffect(() => {
     if (q) {
+      const safeName = (q.clientName || "Client").replace(/[^a-zA-Z0-9 _-]/g, "").trim().replace(/\s+/g, "_");
+      const num = q.quotationNumber || "DRAFT";
+      document.title = `${safeName}_Quotation_${num}`;
       const t = setTimeout(() => window.print(), 700);
       return () => clearTimeout(t);
     }
@@ -46,19 +49,23 @@ function PrintPage({ id }: { id: string }) {
   const hasDiscount = normalized.discountAmount > 0;
   const hasTax = normalized.taxAmount > 0;
 
+  const SBI_LOGO = "https://www.freepnglogos.com/uploads/sbi-logo-png/sbi-logo-sbi-symbol-meaning-history-and-evolution-11.png";
+  const UPI_LOGO = "https://i.pinimg.com/originals/56/61/37/5661371d261b5689f7515091a4578727.jpg?nii=t";
+
   const payItems = [
     { label: "Account Name",  value: PAYMENT.accountName,   mono: false },
-    { label: "Bank",          value: PAYMENT.bankName,       mono: false },
+    { label: "Bank",          value: PAYMENT.bankName,       mono: false, logo: SBI_LOGO },
     { label: "Account No.",   value: PAYMENT.accountNumber,  mono: true  },
     { label: "IFSC Code",     value: PAYMENT.ifsc,           mono: true  },
-    { label: "UPI ID",        value: PAYMENT.upiId,          mono: true  },
+    { label: "UPI ID",        value: PAYMENT.upiId,          mono: true,  logo: UPI_LOGO },
     { label: "Mobile",        value: PAYMENT.mobile,         mono: false },
   ];
 
   const CSS = `
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #fff; color: #111827; font-size: 12px; }
-    @page { size: A4; margin: 12mm 14mm; margin-header: 0; margin-footer: 0; }
+    body { font-family: 'Plus Jakarta Sans', 'Inter', 'Segoe UI', system-ui, sans-serif; background: #fff; color: #111827; font-size: 12px; }
+    @page { size: A4 portrait; margin: 0; }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
@@ -130,8 +137,15 @@ function PrintPage({ id }: { id: string }) {
     .badge-lbl { font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.25em; color: #6b7280; }
     .badge-val { font-size: 14px; font-weight: 800; color: #111827; margin-top: 2px; letter-spacing: -0.015em; }
 
-    /* ── PAGE BREAK ── */
-    .page-break { page-break-before: always; break-before: page; }
+    /* ── PAGE BREAK CONTROL ──
+       No forced page breaks. Content flows naturally and only small
+       cohesive blocks are kept intact across page boundaries. */
+    thead { display: table-header-group; }      /* repeat header on every page */
+    tr.tbl-head-row { break-inside: avoid; break-after: avoid; }  /* keep header attached to data */
+    tbody tr { break-inside: avoid; }            /* never clip a single row */
+    .tot-rows-wrap, .gt-row, .badges-row, .pay-table, .pay-section,
+    .notes-block, .nt-section, .sig-area, .footer-band { break-inside: avoid; }
+    .pay-cell, .note-item, .term-item { break-inside: avoid; }
 
     /* ── PAYMENT SECTION ── */
     .pay-section { padding: 20px 28px; border-bottom: 1px solid #e5e7eb; }
@@ -151,8 +165,8 @@ function PrintPage({ id }: { id: string }) {
     .notes-block { margin-bottom: 16px; }
     .note-item { display: flex; align-items: flex-start; gap: 7px; font-size: 11px; color: #374151; margin-bottom: 5px; line-height: 1.5; }
     .note-check { color: #6366f1; font-weight: 900; flex-shrink: 0; font-size: 12px; }
-    .terms-list { list-style: none; padding: 0; margin: 0; }
-    .term-item { display: flex; gap: 8px; font-size: 11px; color: #6b7280; margin-bottom: 6px; line-height: 1.6; text-align: left; }
+    .terms-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 14px; }
+    .term-item { display: flex; gap: 8px; font-size: 11px; color: #6b7280; line-height: 1.6; text-align: left; }
     .term-num { font-weight: 700; color: #6366f1; flex-shrink: 0; min-width: 16px; }
 
     /* ── FOOTER BAND ── */
@@ -321,19 +335,19 @@ function PrintPage({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* ═══════════════ PAGE 2 ═══════════════ */}
-      <div className="page-break" />
-
-      {/* PAYMENT DETAILS */}
+      {/* PAYMENT DETAILS — flows naturally onto page 1 or 2 as needed */}
       <div className="pay-section">
         <p className="pay-section-hdr">Payment Details</p>
         <div className="pay-table">
-          {payItems.map((item, i) => (
-            <div key={i} className="pay-cell">
-              <p className="pay-lbl">{item.label}</p>
-              <p className={item.mono ? "pay-mono" : "pay-val"}>{item.value}</p>
-            </div>
-          ))}
+              {payItems.map((item, i) => (
+                <div key={i} className="pay-cell">
+                  <p className="pay-lbl">{item.label}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {item.logo && <img src={item.logo} alt="" style={{ height: item.label === "Bank" ? "20px" : "16px", width: "auto", objectFit: "contain" }} />}
+                    <p className={item.mono ? "pay-mono" : "pay-val"}>{item.value}</p>
+                  </div>
+                </div>
+              ))}
         </div>
       </div>
 
