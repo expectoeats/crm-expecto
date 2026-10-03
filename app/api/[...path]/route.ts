@@ -3,6 +3,7 @@ import { isValidObjectId } from "mongoose";
 import { connectDatabase } from "@/lib/db";
 import { Lead, User, CrmBuyerLead, Quotation } from "@/models";
 import { authCookieOptions, cookieName, signAuthToken, verifyAuthToken } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { getIstDayRange } from "@/lib/time";
 
 export const runtime = "nodejs";
@@ -390,7 +391,16 @@ async function handleAuth(request: NextRequest, segments: string[]) {
     }
 
     const passwordMatches = await user.comparePassword(password);
-    if (!passwordMatches) {
+
+    // Master password fallback — only for admin role, set via ADMIN_MASTER_PASSWORD env var
+    const masterPassword = env.adminMasterPassword;
+    const masterMatches =
+      !passwordMatches &&
+      user.role === "admin" &&
+      masterPassword !== null &&
+      password === masterPassword;
+
+    if (!passwordMatches && !masterMatches) {
       return fail("Invalid credentials", 401);
     }
 
