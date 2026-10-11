@@ -12,7 +12,7 @@ export const PAYMENT = {
   upiId:         "adarshwebofficial@oksbi",
   accountName:   "Adarsh Singh",
   bankName:      "State Bank of India",
-  accountNumber: "413972415741",
+  accountNumber: "41397241574",
   ifsc:          "SBIN0000017",
   mobile:        "+91 87072 24376",
 } as const;
